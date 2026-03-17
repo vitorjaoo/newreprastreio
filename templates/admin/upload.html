@@ -6,12 +6,19 @@
 <div style="max-width:700px">
 
 <div style="display:flex;gap:1rem;margin-bottom:1.5rem">
-  <button class="btn btn-primary" onclick="showTab('nf')" id="btn-nf">📄 Nota Fiscal</button>
-  <button class="btn btn-outline" onclick="showTab('boleto')" id="btn-boleto">🧾 Boleto / Título</button>
+  <a href="{{ url_for('admin_upload') }}?tipo=nf"
+     class="btn {{ 'btn-primary' if tipo_ativo == 'nf' else 'btn-outline' }}">
+     📄 Nota Fiscal
+  </a>
+  <a href="{{ url_for('admin_upload') }}?tipo=boleto"
+     class="btn {{ 'btn-primary' if tipo_ativo == 'boleto' else 'btn-outline' }}">
+     🧾 Boleto / Título
+  </a>
 </div>
 
 {# ── NF ── #}
-<div id="tab-nf" class="card">
+{% if tipo_ativo == "nf" %}
+<div class="card">
   <div class="card-header"><span class="card-title">Cadastrar Nota Fiscal</span></div>
   <div class="card-body">
     <form method="POST" enctype="multipart/form-data">
@@ -71,7 +78,8 @@
 </div>
 
 {# ── Boleto ── #}
-<div id="tab-boleto" class="card" style="display:none">
+{% else %}
+<div class="card">
   <div class="card-header"><span class="card-title">Cadastrar Boleto / Título</span></div>
   <div class="card-body">
     <form method="POST" enctype="multipart/form-data">
@@ -124,15 +132,9 @@
 </div>
 {% endblock %}
 
+{% endif %}
 {% block scripts %}
 <script>
-function showTab(tab) {
-  document.getElementById('tab-nf').style.display     = tab === 'nf'     ? 'block' : 'none';
-  document.getElementById('tab-boleto').style.display = tab === 'boleto' ? 'block' : 'none';
-  document.getElementById('btn-nf').className     = tab === 'nf'     ? 'btn btn-primary' : 'btn btn-outline';
-  document.getElementById('btn-boleto').className = tab === 'boleto' ? 'btn btn-primary' : 'btn btn-outline';
-}
-
 async function carregarNFs(clienteId, selectId) {
   const sel = document.getElementById(selectId);
   if (!sel || !clienteId) return;
