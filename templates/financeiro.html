@@ -19,6 +19,21 @@
   </div>
 </div>
 
+{# Alertas de vencimento próximo #}
+{% for t in titulos %}
+  {% if t.status == 'aberto' and t.dias_vencimento is not none %}
+    {% if t.dias_vencimento < 0 %}
+      <div class="alert alert-danger">
+        ⚠️ Título <strong>{{ t.numero_titulo }}</strong> venceu há <strong>{{ t.dias_vencimento|abs }} dia(s)</strong>. Regularize para evitar juros.
+      </div>
+    {% elif t.dias_vencimento <= 5 %}
+      <div class="alert alert-warning">
+        🔔 Título <strong>{{ t.numero_titulo }}</strong> vence em <strong>{{ t.dias_vencimento }} dia(s)</strong> ({{ t.vencimento }}).
+      </div>
+    {% endif %}
+  {% endif %}
+{% endfor %}
+
 {% if titulos %}
 <div class="card">
   <div class="card-header"><span class="card-title">Seus títulos</span></div>
@@ -28,6 +43,7 @@
         <tr>
           <th>Título</th>
           <th>Vencimento</th>
+          <th>Prazo</th>
           <th>Valor</th>
           <th>Status</th>
           <th>Boleto</th>
@@ -38,6 +54,31 @@
         <tr>
           <td style="font-weight:500">{{ t.numero_titulo }}</td>
           <td>{{ t.vencimento }}</td>
+          <td>
+            {% if t.status == 'aberto' and t.dias_vencimento is not none %}
+              {% if t.dias_vencimento < 0 %}
+                <span style="color:var(--danger);font-weight:600;font-size:.8rem">
+                  {{ t.dias_vencimento|abs }}d em atraso
+                </span>
+              {% elif t.dias_vencimento == 0 %}
+                <span style="color:var(--danger);font-weight:600;font-size:.8rem">
+                  Vence hoje!
+                </span>
+              {% elif t.dias_vencimento <= 5 %}
+                <span style="color:var(--warning);font-weight:600;font-size:.8rem">
+                  {{ t.dias_vencimento }}d restantes
+                </span>
+              {% else %}
+                <span style="color:var(--gray-400);font-size:.8rem">
+                  {{ t.dias_vencimento }}d restantes
+                </span>
+              {% endif %}
+            {% elif t.status == 'pago' %}
+              <span style="color:var(--success);font-size:.8rem">—</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
           <td style="font-weight:600">R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}</td>
           <td>
             {% if t.status_visual == 'pago' %}
