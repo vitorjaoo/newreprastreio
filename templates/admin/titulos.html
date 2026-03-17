@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Títulos{% endblock %}
+{% block page_title %}Títulos Financeiros{% endblock %}
+
+{% block content %}
+
+<div class="stats-grid" style="margin-bottom:1.75rem">
+  <div class="stat-card">
+    <div class="stat-label">Em aberto</div>
+    <div class="stat-value red">R$ {{ "%.2f"|format(em_aberto)|replace('.', ',') }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Recebido</div>
+    <div class="stat-value green">R$ {{ "%.2f"|format(recebido)|replace('.', ',') }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Títulos abertos</div>
+    <div class="stat-value amber">{{ titulos|selectattr('status', 'equalto', 'aberto')|list|length }}</div>
+  </div>
+</div>
+
+{% if titulos %}
+<div class="card">
+  <div class="card-header"><span class="card-title">Todos os títulos</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Título</th><th>Cliente</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for t in titulos %}
+        <tr>
+          <td style="font-weight:500">{{ t.numero_titulo }}</td>
+          <td>{{ t.cliente }}</td>
+          <td style="font-weight:600">R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}</td>
+          <td>{{ t.vencimento }}</td>
+          <td>
+            {% if t.status == 'pago' %}
+              <span class="badge badge-green">Pago</span>
+            {% else %}
+              <span class="badge badge-amber">Em aberto</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if t.status == 'aberto' %}
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="titulo_id" value="{{ t.id }}">
+              <button type="submit" class="btn btn-success btn-sm"
+                      onclick="return confirm('Marcar como pago?')">✅ Pago</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state"><p>Nenhum título cadastrado.</p></div>
+{% endif %}
+
+{% endblock %}

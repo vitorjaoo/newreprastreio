@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Notas Fiscais{% endblock %}
+{% block page_title %}Notas Fiscais{% endblock %}
+
+{% block content %}
+{% if nfs %}
+<div class="card">
+  <div class="card-header"><span class="card-title">{{ nfs|length }} nota(s) cadastrada(s)</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>NF</th><th>Cliente</th><th>Representada</th><th>Valor</th><th>Emissão</th><th>Status</th><th>Prev. Entrega</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for nf in nfs %}
+        <tr>
+          <td style="font-weight:600">{{ nf.numero_nf }}</td>
+          <td>{{ nf.cliente }}</td>
+          <td>{{ nf.representada or '—' }}</td>
+          <td>R$ {{ "%.2f"|format(nf.valor|float)|replace('.', ',') }}</td>
+          <td>{{ nf.data_emissao or '—' }}</td>
+          <td>
+            <span class="badge {{ 'badge-green' if nf.status == 'entregue' else 'badge-blue' }}">
+              {{ nf.status or 'ativo' }}
+            </span>
+          </td>
+          <td>{{ nf.observacao or '—' }}</td>
+          <td>
+            <button class="btn btn-outline btn-sm" onclick="editarNF({{ nf.id }}, '{{ nf.status or '' }}', '{{ nf.observacao or '' }}', '{{ nf.representada or '' }}')">
+              Editar
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state"><p>Nenhuma NF cadastrada.</p></div>
+{% endif %}
+
+{# Modal de edição #}
+<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:white;border-radius:16px;padding:1.5rem;width:100%;max-width:460px;box-shadow:0 20px 40px rgba(0,0,0,.15)">
+    <h3 style="margin-bottom:1.25rem;font-size:1rem;font-weight:600">Editar NF</h3>
+    <form method="POST" id="form-editar">
+      <input type="hidden" name="nf_id" id="edit-id">
+      <div class="form-group">
+        <label class="form-label">Representada</label>
+        <input class="form-control" type="text" name="representada" id="edit-rep">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <input class="form-control" type="text" name="status" id="edit-status" placeholder="Ex: Entregue">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Prev. entrega</label>
+          <input class="form-control" type="text" name="observacao" id="edit-obs" placeholder="DD/MM/AAAA">
+        </div>
+      </div>
+      <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function editarNF(id, status, obs, rep) {
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-status').value = status;
+  document.getElementById('edit-obs').value = obs;
+  document.getElementById('edit-rep').value = rep;
+  const overlay = document.getElementById('modal-overlay');
+  overlay.style.display = 'flex';
+}
+function fecharModal() {
+  document.getElementById('modal-overlay').style.display = 'none';
+}
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) fecharModal();
+});
+</script>
+{% endblock %}

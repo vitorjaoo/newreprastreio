@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}NF {{ nf.numero_nf }}{% endblock %}
+{% block page_title %}Detalhes da Entrega{% endblock %}
+
+{% block content %}
+
+<div style="margin-bottom:1rem">
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline btn-sm">
+    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>
+    Voltar
+  </a>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 360px;gap:1.5rem;align-items:start">
+
+  {# Coluna principal — rastreio #}
+  <div>
+    {# Header da NF #}
+    <div class="card" style="margin-bottom:1.25rem">
+      <div class="card-body">
+        <div class="flex-between">
+          <div>
+            <div style="font-size:1.25rem;font-weight:700;color:var(--gray-800)">NF {{ nf.numero_nf }}</div>
+            {% if nf.representada %}
+            <div style="font-size:.875rem;color:var(--gray-400);margin-top:3px">🏭 {{ nf.representada }}</div>
+            {% endif %}
+          </div>
+          {% set s = nf.status or 'ativo' %}
+          {% if s == 'entregue' %}
+            <span class="badge badge-green" style="font-size:.875rem;padding:6px 14px"><span class="badge-dot"></span>Entregue</span>
+          {% elif s == 'cancelado' %}
+            <span class="badge badge-red" style="font-size:.875rem;padding:6px 14px"><span class="badge-dot"></span>Cancelado</span>
+          {% else %}
+            <span class="badge badge-blue" style="font-size:.875rem;padding:6px 14px"><span class="badge-dot"></span>{{ s|title if s != 'ativo' else 'Em andamento' }}</span>
+          {% endif %}
+        </div>
+
+        <hr class="divider">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;font-size:.875rem">
+          {% if nf.data_emissao %}
+          <div>
+            <div class="text-muted">Data de emissão</div>
+            <div style="font-weight:500;margin-top:2px">{{ nf.data_emissao }}</div>
+          </div>
+          {% endif %}
+          {% if nf.observacao %}
+          <div>
+            <div class="text-muted">Prev. de entrega</div>
+            <div style="font-weight:500;margin-top:2px;color:var(--primary)">{{ nf.observacao }}</div>
+          </div>
+          {% endif %}
+          {% if nf.valor %}
+          <div>
+            <div class="text-muted">Valor</div>
+            <div style="font-weight:600;margin-top:2px">R$ {{ "%.2f"|format(nf.valor|float)|replace('.', ',') }}</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {# Timeline de rastreio #}
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📦 Rastreio da Entrega</span>
+      </div>
+      <div class="card-body">
+        {% if nf.eventos %}
+        <div class="timeline">
+          {% for ev in nf.eventos %}
+          {% set is_last = loop.last %}
+          <div class="timeline-item">
+            <div class="timeline-dot {{ 'current' if is_last else 'done' }}">
+              {% if is_last %}
+                <svg viewBox="0 0 20 20" fill="white"><circle cx="10" cy="10" r="4"/></svg>
+              {% else %}
+                <svg viewBox="0 0 20 20" fill="none" stroke="#059669" stroke-width="2.5"><path d="M5 10l4 4 6-6"/></svg>
+              {% endif %}
+            </div>
+            <div class="timeline-body">
+              <div class="timeline-desc {{ 'current' if is_last else '' }}">{{ ev.descricao }}</div>
+              <div class="timeline-date">{{ ev.data_hora }}</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state" style="padding:2rem">
+          <p>Nenhuma atualização de rastreio ainda.<br>
+          <span style="font-size:.8rem">O escritório atualizará em breve.</span></p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Coluna lateral — documentos #}
+  <div style="display:flex;flex-direction:column;gap:1.25rem">
+
+    {# Download NF #}
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📄 Nota Fiscal</span>
+      </div>
+      <div class="card-body">
+        {% if nf.pdf and nf.pdf.pdf_base64 %}
+        <a href="{{ url_for('download_nf', nf_id=nf.id) }}"
+           class="btn btn-primary btn-full">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+          Baixar NF (PDF)
+        </a>
+        {% else %}
+        <p class="text-muted" style="text-align:center">PDF não disponível</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Boletos vinculados #}
+    {% if titulos %}
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🧾 Boletos</span>
+      </div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:.75rem">
+        {% for t in titulos %}
+        <div style="padding:.75rem;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-100)">
+          <div class="flex-between" style="margin-bottom:.5rem">
+            <span style="font-size:.875rem;font-weight:600">{{ t.numero_titulo }}</span>
+            {% if t.status == 'pago' %}
+              <span class="badge badge-green">Pago</span>
+            {% else %}
+              <span class="badge badge-amber">Em aberto</span>
+            {% endif %}
+          </div>
+          <div style="font-size:.8rem;color:var(--gray-400);margin-bottom:.65rem">
+            Venc: {{ t.vencimento }} ·
+            R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}
+          </div>
+          {% if t.status == 'aberto' %}
+          <a href="{{ url_for('download_boleto', titulo_id=t.id) }}"
+             class="btn btn-outline btn-sm btn-full">
+            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            Baixar Boleto
+          </a>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+
+{# Responsivo #}
+<style>
+@media (max-width: 768px) {
+  div[style*="grid-template-columns:1fr 360px"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Rastreio{% endblock %}
+{% block page_title %}Gerenciar Rastreio{% endblock %}
+
+{% block content %}
+
+<div class="form-group" style="max-width:280px;margin-bottom:1.5rem">
+  <select class="form-control" id="filtro-cliente" onchange="filtrarCliente(this.value)">
+    <option value="">Todos os clientes</option>
+    {% for c in clientes %}
+    <option value="{{ c }}">{{ c }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+{% for nf in nfs %}
+<div class="card" id="nf-{{ nf.id }}" style="margin-bottom:1.25rem" data-cliente="{{ nf.cliente }}">
+  <div class="card-header">
+    <div>
+      <span class="card-title">NF {{ nf.numero_nf }}</span>
+      <span class="text-muted" style="margin-left:.5rem;font-size:.8rem">{{ nf.cliente }}</span>
+      {% if nf.representada %}<span class="text-muted" style="margin-left:.5rem;font-size:.8rem">· {{ nf.representada }}</span>{% endif %}
+    </div>
+    <span class="badge badge-gray">{{ nf.eventos|length }} evento(s)</span>
+  </div>
+  <div class="card-body">
+
+    {# Timeline atual #}
+    {% if nf.eventos %}
+    <div class="timeline" style="margin-bottom:1.25rem">
+      {% for ev in nf.eventos %}
+      <div class="timeline-item">
+        <div class="timeline-dot {{ 'current' if loop.last else 'done' }}">
+          {% if loop.last %}
+            <svg viewBox="0 0 20 20" fill="white"><circle cx="10" cy="10" r="4"/></svg>
+          {% else %}
+            <svg viewBox="0 0 20 20" fill="none" stroke="#059669" stroke-width="2.5"><path d="M5 10l4 4 6-6"/></svg>
+          {% endif %}
+        </div>
+        <div class="timeline-body flex-between">
+          <div>
+            <div class="timeline-desc">{{ ev.descricao }}</div>
+            <div class="timeline-date">{{ ev.data_hora }}</div>
+          </div>
+          <form method="POST" action="{{ url_for('admin_rastreio_remover', evento_id=ev.id) }}"
+                onsubmit="return confirm('Remover este evento?')">
+            <button type="submit" class="btn btn-outline btn-sm" style="color:var(--danger);border-color:var(--danger)">✕</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <hr class="divider">
+    {% endif %}
+
+    {# Adicionar evento #}
+    <form method="POST" action="{{ url_for('admin_rastreio_adicionar') }}">
+      <input type="hidden" name="nf_id" value="{{ nf.id }}">
+      <div class="form-row">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Descrição do evento</label>
+          <input class="form-control" type="text" name="descricao"
+                 placeholder="Ex: Saiu para entrega, Em separação..." required>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Data e hora</label>
+          <input class="form-control" type="text" name="data_hora"
+                 value="{{ now_str }}" placeholder="DD/MM/AAAA HH:MM">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:.75rem">
+        ➕ Adicionar evento
+      </button>
+    </form>
+
+  </div>
+</div>
+{% else %}
+<div class="empty-state"><p>Nenhuma NF cadastrada ainda.</p></div>
+{% endfor %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filtrarCliente(val) {
+  document.querySelectorAll('[data-cliente]').forEach(el => {
+    el.style.display = (!val || el.dataset.cliente === val) ? 'block' : 'none';
+  });
+}
+</script>
+{% endblock %}

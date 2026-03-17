@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+{% block page_title %}Clientes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex;gap:1rem;margin-bottom:1.5rem">
+  <button class="btn btn-primary" onclick="showTab('cad')" id="btn-cad">➕ Cadastrar</button>
+  <button class="btn btn-outline" onclick="showTab('imp')" id="btn-imp">📥 Importar Planilha</button>
+</div>
+
+{# Cadastrar #}
+<div id="tab-cad" class="card" style="max-width:600px;margin-bottom:1.5rem">
+  <div class="card-header"><span class="card-title">Novo cliente</span></div>
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="acao" value="cadastrar">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nome da empresa *</label>
+          <input class="form-control" type="text" name="nome" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">CNPJ *</label>
+          <input class="form-control" type="text" name="cnpj" placeholder="00.000.000/0001-00" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">E-mail</label>
+          <input class="form-control" type="email" name="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp</label>
+          <input class="form-control" type="text" name="whatsapp">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Senha de acesso *</label>
+        <input class="form-control" type="password" name="senha" required minlength="4">
+      </div>
+      <button type="submit" class="btn btn-primary">Cadastrar</button>
+    </form>
+  </div>
+</div>
+
+{# Importar #}
+<div id="tab-imp" class="card" style="max-width:600px;margin-bottom:1.5rem;display:none">
+  <div class="card-header"><span class="card-title">Importar via Excel</span></div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-bottom:1rem">Use o modelo Excel para importar vários clientes de uma vez.</p>
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="acao" value="importar">
+      <div class="form-group">
+        <label class="form-label">Planilha (.xlsx)</label>
+        <input class="form-control" type="file" name="planilha" accept=".xlsx" required>
+      </div>
+      <button type="submit" class="btn btn-primary">📥 Importar</button>
+    </form>
+  </div>
+</div>
+
+{# Lista #}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Clientes cadastrados ({{ clientes|length }})</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>CNPJ</th><th>E-mail</th><th>WhatsApp</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td style="font-weight:500">{{ c.nome }}</td>
+          <td class="text-mono">{{ c.cnpj }}</td>
+          <td>{{ c.email or '—' }}</td>
+          <td>{{ c.whatsapp or '—' }}</td>
+          <td>
+            {% if c.ativo %}
+              <span class="badge badge-green">Ativo</span>
+            {% else %}
+              <span class="badge badge-red">Inativo</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="POST" style="display:inline">
+              <input type="hidden" name="acao" value="inativar">
+              <input type="hidden" name="cliente_id" value="{{ c.id }}">
+              <button type="submit" class="btn btn-outline btn-sm"
+                      onclick="return confirm('{{ 'Inativar' if c.ativo else 'Ativar' }} este cliente?')">
+                {{ '❌ Inativar' if c.ativo else '✅ Ativar' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(tab) {
+  document.getElementById('tab-cad').style.display = tab === 'cad' ? 'block' : 'none';
+  document.getElementById('tab-imp').style.display = tab === 'imp' ? 'block' : 'none';
+  document.getElementById('btn-cad').className = tab === 'cad' ? 'btn btn-primary' : 'btn btn-outline';
+  document.getElementById('btn-imp').className = tab === 'imp' ? 'btn btn-primary' : 'btn btn-outline';
+}
+</script>
+{% endblock %}

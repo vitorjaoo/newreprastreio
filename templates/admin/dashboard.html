@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block page_title %}Painel Administrativo{% endblock %}
+
+{% block content %}
+<div class="stats-grid" style="margin-bottom:2rem">
+  <div class="stat-card">
+    <div class="stat-label">Clientes</div>
+    <div class="stat-value blue">{{ total_clientes }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Notas Fiscais</div>
+    <div class="stat-value">{{ total_nfs }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Títulos em aberto</div>
+    <div class="stat-value amber">{{ titulos_abertos }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total em aberto</div>
+    <div class="stat-value green" style="font-size:1.2rem">
+      R$ {{ "%.2f"|format(em_aberto)|replace('.', ',') }}
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+  <a href="{{ url_for('admin_upload') }}" class="card" style="text-decoration:none;padding:1.5rem;display:flex;align-items:center;gap:1rem;transition:all .18s">
+    <div style="width:48px;height:48px;background:var(--primary-lt);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <svg width="24" height="24" viewBox="0 0 20 20" fill="var(--primary)"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+    </div>
+    <div>
+      <div style="font-weight:600;color:var(--gray-800)">Upload de Documentos</div>
+      <div class="text-muted">NFs e boletos</div>
+    </div>
+  </a>
+  <a href="{{ url_for('admin_rastreio') }}" class="card" style="text-decoration:none;padding:1.5rem;display:flex;align-items:center;gap:1rem;transition:all .18s">
+    <div style="width:48px;height:48px;background:var(--success-lt);border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <svg width="24" height="24" viewBox="0 0 20 20" fill="var(--success)"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1h3.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1v-5a1 1 0 00-.293-.707l-3-3A1 1 0 0016 4H3z"/></svg>
+    </div>
+    <div>
+      <div style="font-weight:600;color:var(--gray-800)">Rastreio</div>
+      <div class="text-muted">Atualizar entregas</div>
+    </div>
+  </a>
+</div>
+{% endblock %}

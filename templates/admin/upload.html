@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Upload{% endblock %}
+{% block page_title %}Upload de Documentos{% endblock %}
+
+{% block content %}
+<div style="max-width:700px">
+
+<div style="display:flex;gap:1rem;margin-bottom:1.5rem">
+  <button class="btn btn-primary" onclick="showTab('nf')" id="btn-nf">📄 Nota Fiscal</button>
+  <button class="btn btn-outline" onclick="showTab('boleto')" id="btn-boleto">🧾 Boleto / Título</button>
+</div>
+
+{# ── NF ── #}
+<div id="tab-nf" class="card">
+  <div class="card-header"><span class="card-title">Cadastrar Nota Fiscal</span></div>
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="tipo" value="nf">
+
+      <div class="form-group">
+        <label class="form-label">PDF da NF *</label>
+        <input class="form-control" type="file" name="arquivo" accept=".pdf" required>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <select class="form-control" name="cliente_id" id="cliente-nf" required onchange="carregarNFs(this.value, 'nf-vinc')">
+            <option value="">Selecione...</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}">{{ c.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Representada</label>
+          <input class="form-control" type="text" name="representada" placeholder="Ex: Fornecedor ABC">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Número da NF *</label>
+          <input class="form-control" type="text" name="numero_nf" placeholder="000123" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input class="form-control" type="number" name="valor" step="0.01" min="0" placeholder="0,00">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data de emissão</label>
+          <input class="form-control" type="text" name="data_emissao" placeholder="DD/MM/AAAA">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data prevista de entrega</label>
+          <input class="form-control" type="text" name="observacao" placeholder="DD/MM/AAAA">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <input class="form-control" type="text" name="status" placeholder="Ex: Em separação, Saiu para entrega..." value="ativo">
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full">💾 Salvar NF</button>
+    </form>
+  </div>
+</div>
+
+{# ── Boleto ── #}
+<div id="tab-boleto" class="card" style="display:none">
+  <div class="card-header"><span class="card-title">Cadastrar Boleto / Título</span></div>
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="tipo" value="boleto">
+
+      <div class="form-group">
+        <label class="form-label">PDF do Boleto *</label>
+        <input class="form-control" type="file" name="arquivo" accept=".pdf" required>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <select class="form-control" name="cliente_id" id="cliente-bol" required onchange="carregarNFs(this.value, 'nf-vinc-bol')">
+            <option value="">Selecione...</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}">{{ c.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vincular à NF</label>
+          <select class="form-control" name="nf_id" id="nf-vinc-bol">
+            <option value="">Nenhuma</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Número do título *</label>
+          <input class="form-control" type="text" name="numero_titulo" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input class="form-control" type="number" name="valor" step="0.01" min="0">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Vencimento *</label>
+        <input class="form-control" type="text" name="vencimento" placeholder="DD/MM/AAAA" required>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full">💾 Salvar Boleto</button>
+    </form>
+  </div>
+</div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showTab(tab) {
+  document.getElementById('tab-nf').style.display     = tab === 'nf'     ? 'block' : 'none';
+  document.getElementById('tab-boleto').style.display = tab === 'boleto' ? 'block' : 'none';
+  document.getElementById('btn-nf').className     = tab === 'nf'     ? 'btn btn-primary' : 'btn btn-outline';
+  document.getElementById('btn-boleto').className = tab === 'boleto' ? 'btn btn-primary' : 'btn btn-outline';
+}
+
+async function carregarNFs(clienteId, selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel || !clienteId) return;
+  sel.innerHTML = '<option value="">Carregando...</option>';
+  const res  = await fetch(`/admin/nfs-do-cliente/${clienteId}`);
+  const nfs  = await res.json();
+  sel.innerHTML = '<option value="">Nenhuma</option>' +
+    nfs.map(n => `<option value="${n.id}">NF ${n.numero_nf} — ${n.data_emissao}</option>`).join('');
+}
+</script>
+{% endblock %}
