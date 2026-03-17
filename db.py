@@ -2,23 +2,23 @@
 db.py — conexão com Turso usando o novo SDK libsql
 Compatível com migração futura para Oracle (SQL padrão)
 """
-
+ 
 import libsql
 import streamlit as st
-
-
+ 
+ 
 def get_conn():
     return libsql.connect(
         database=st.secrets["TURSO_DATABASE_URL"],
         auth_token=st.secrets["TURSO_AUTH_TOKEN"],
     )
-
-
+ 
+ 
 def _rows_to_dicts(cursor):
     cols = [d[0] for d in cursor.description]
     return [dict(zip(cols, row)) for row in cursor.fetchall()]
-
-
+ 
+ 
 def criar_tabelas():
     conn = get_conn()
     conn.execute("""
@@ -85,16 +85,16 @@ def criar_tabelas():
         except Exception:
             pass
     conn.commit()
-
-
+ 
+ 
 # ─── Clientes ────────────────────────────────────────────────────────────────
-
+ 
 def listar_clientes():
     conn = get_conn()
     cur = conn.execute("SELECT id, nome, cnpj, email, whatsapp, ativo FROM clientes ORDER BY nome")
     return _rows_to_dicts(cur)
-
-
+ 
+ 
 def buscar_cliente_cnpj(cnpj: str):
     conn = get_conn()
     cur = conn.execute(
@@ -103,8 +103,8 @@ def buscar_cliente_cnpj(cnpj: str):
     )
     rows = _rows_to_dicts(cur)
     return rows[0] if rows else None
-
-
+ 
+ 
 def criar_cliente(nome, cnpj, email, whatsapp, senha_hash):
     conn = get_conn()
     conn.execute(
@@ -112,10 +112,10 @@ def criar_cliente(nome, cnpj, email, whatsapp, senha_hash):
         [nome, cnpj, email, whatsapp, senha_hash]
     )
     conn.commit()
-
-
+ 
+ 
 # ─── Notas Fiscais ────────────────────────────────────────────────────────────
-
+ 
 def listar_nfs(cliente_id: int):
     conn = get_conn()
     cur = conn.execute(
@@ -125,8 +125,8 @@ def listar_nfs(cliente_id: int):
         [cliente_id]
     )
     return _rows_to_dicts(cur)
-
-
+ 
+ 
 def listar_todas_nfs():
     conn = get_conn()
     cur = conn.execute(
@@ -138,8 +138,8 @@ def listar_todas_nfs():
            ORDER BY nf.criado_em DESC"""
     )
     return _rows_to_dicts(cur)
-
-
+ 
+ 
 def inserir_nf(cliente_id, numero_nf, valor, data_emissao, pdf_base64,
                nome_arquivo, codigo_rastreio="", transportadora="",
                status="ativo", observacao="", representada=""):
@@ -154,8 +154,8 @@ def inserir_nf(cliente_id, numero_nf, valor, data_emissao, pdf_base64,
          status, observacao, representada]
     )
     conn.commit()
-
-
+ 
+ 
 def atualizar_status_nf(nf_id, status, observacao=""):
     conn = get_conn()
     conn.execute(
@@ -163,8 +163,8 @@ def atualizar_status_nf(nf_id, status, observacao=""):
         [status, observacao, nf_id]
     )
     conn.commit()
-
-
+ 
+ 
 def atualizar_rastreio_nf(nf_id, codigo_rastreio, transportadora):
     conn = get_conn()
     conn.execute(
@@ -172,8 +172,8 @@ def atualizar_rastreio_nf(nf_id, codigo_rastreio, transportadora):
         [codigo_rastreio, transportadora, nf_id]
     )
     conn.commit()
-
-
+ 
+ 
 def atualizar_representada(nf_id, representada):
     conn = get_conn()
     conn.execute(
@@ -181,8 +181,8 @@ def atualizar_representada(nf_id, representada):
         [representada, nf_id]
     )
     conn.commit()
-
-
+ 
+ 
 def get_pdf_nf(nf_id: int):
     conn = get_conn()
     cur = conn.execute(
@@ -190,10 +190,10 @@ def get_pdf_nf(nf_id: int):
     )
     rows = _rows_to_dicts(cur)
     return rows[0] if rows else None
-
-
+ 
+ 
 # ─── Rastreio Eventos ─────────────────────────────────────────────────────────
-
+ 
 def listar_eventos_rastreio(nf_id: int):
     conn = get_conn()
     cur = conn.execute(
@@ -201,8 +201,8 @@ def listar_eventos_rastreio(nf_id: int):
         [nf_id]
     )
     return _rows_to_dicts(cur)
-
-
+ 
+ 
 def inserir_evento_rastreio(nf_id: int, descricao: str, data_hora: str):
     conn = get_conn()
     conn.execute(
@@ -210,16 +210,16 @@ def inserir_evento_rastreio(nf_id: int, descricao: str, data_hora: str):
         [nf_id, descricao, data_hora]
     )
     conn.commit()
-
-
+ 
+ 
 def deletar_evento_rastreio(evento_id: int):
     conn = get_conn()
     conn.execute("DELETE FROM rastreio_eventos WHERE id = ?", [evento_id])
     conn.commit()
-
-
+ 
+ 
 # ─── Títulos ──────────────────────────────────────────────────────────────────
-
+ 
 def listar_titulos(cliente_id: int):
     conn = get_conn()
     cur = conn.execute(
@@ -229,8 +229,8 @@ def listar_titulos(cliente_id: int):
         [cliente_id]
     )
     return _rows_to_dicts(cur)
-
-
+ 
+ 
 def listar_todos_titulos():
     conn = get_conn()
     cur = conn.execute(
@@ -241,8 +241,8 @@ def listar_todos_titulos():
            ORDER BY t.vencimento ASC"""
     )
     return _rows_to_dicts(cur)
-
-
+ 
+ 
 def inserir_titulo(cliente_id, numero_titulo, valor, vencimento,
                    boleto_base64, nome_arquivo, nf_id=None):
     conn = get_conn()
@@ -255,8 +255,8 @@ def inserir_titulo(cliente_id, numero_titulo, valor, vencimento,
          boleto_base64, nome_arquivo, nf_id]
     )
     conn.commit()
-
-
+ 
+ 
 def get_pdf_titulo(titulo_id: int):
     conn = get_conn()
     cur = conn.execute(
@@ -264,14 +264,14 @@ def get_pdf_titulo(titulo_id: int):
     )
     rows = _rows_to_dicts(cur)
     return rows[0] if rows else None
-
-
+ 
+ 
 def marcar_titulo_pago(titulo_id: int):
     conn = get_conn()
     conn.execute("UPDATE titulos SET status='pago' WHERE id=?", [titulo_id])
     conn.commit()
-
-
+ 
+ 
 def titulos_vencendo(dias: int = 5):
     conn = get_conn()
     cur = conn.execute(
@@ -286,16 +286,17 @@ def titulos_vencendo(dias: int = 5):
         [str(dias)]
     )
     return _rows_to_dicts(cur)
-
-
+ 
+ 
 def atualizar_senha(cliente_id: int, senha_hash: str):
     conn = get_conn()
     conn.execute("UPDATE clientes SET senha_hash=? WHERE id=?", [senha_hash, cliente_id])
     conn.commit()
-
-
+ 
+ 
 def toggle_cliente_ativo(cliente_id: int):
     conn = get_conn()
     conn.execute("UPDATE clientes SET ativo = CASE WHEN ativo=1 THEN 0 ELSE 1 END WHERE id=?",
                  [cliente_id])
     conn.commit()
+ 
