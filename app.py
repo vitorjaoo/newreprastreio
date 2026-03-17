@@ -212,16 +212,22 @@ def financeiro():
     titulos = db.listar_titulos(cliente["id"])
     hoje    = datetime.now().strftime("%Y-%m-%d")
 
+    from datetime import date
     for t in titulos:
         try:
             p = t["vencimento"].split("/")
             iso = f"{p[2]}-{p[1]}-{p[0]}"
+            venc_date = date.fromisoformat(iso)
+            hoje_date = date.today()
+            dias = (venc_date - hoje_date).days
+            t["dias_vencimento"] = dias
             if t["status"] == "aberto" and iso < hoje:
                 t["status_visual"] = "vencido"
             else:
                 t["status_visual"] = t["status"]
         except Exception:
             t["status_visual"] = t["status"]
+            t["dias_vencimento"] = None
 
     em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
     quitado   = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")

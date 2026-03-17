@@ -212,7 +212,13 @@ def get_pdf_nf(nf_id: int):
 def listar_eventos_rastreio(nf_id: int):
     conn = get_conn()
     cur = conn.execute(
-        "SELECT id, descricao, data_hora FROM rastreio_eventos WHERE nf_id = ? ORDER BY data_hora ASC",
+        """SELECT id, descricao, data_hora FROM rastreio_eventos WHERE nf_id = ?
+           ORDER BY
+             CASE WHEN data_hora LIKE '__/__/_____%'
+               THEN substr(data_hora,7,4)||'-'||substr(data_hora,4,2)||'-'||substr(data_hora,1,2)||substr(data_hora,11)
+             WHEN data_hora LIKE '__/__/____'
+               THEN substr(data_hora,7,4)||'-'||substr(data_hora,4,2)||'-'||substr(data_hora,1,2)
+             ELSE data_hora END ASC""",
         [nf_id]
     )
     return _rows_to_dicts(cur)
