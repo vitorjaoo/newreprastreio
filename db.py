@@ -9,11 +9,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+_conn = None
+
 def get_conn():
-    return libsql.connect(
-        database=os.getenv("TURSO_DATABASE_URL"),
-        auth_token=os.getenv("TURSO_AUTH_TOKEN"),
-    )
+    global _conn
+    try:
+        if _conn is None:
+            _conn = libsql.connect(
+                database=os.getenv("TURSO_DATABASE_URL"),
+                auth_token=os.getenv("TURSO_AUTH_TOKEN"),
+            )
+        _conn.execute("SELECT 1")
+        return _conn
+    except Exception:
+        _conn = libsql.connect(
+            database=os.getenv("TURSO_DATABASE_URL"),
+            auth_token=os.getenv("TURSO_AUTH_TOKEN"),
+        )
+        return _conn
 
 
 def _rows_to_dicts(cursor):
