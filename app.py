@@ -313,6 +313,8 @@ def admin_upload():
                 data_emissao=request.form.get("data_emissao",""),
                 pdf_base64=pdf_b64,
                 nome_arquivo=arquivo.filename,
+                codigo_rastreio=request.form.get("codigo_rastreio",""),
+                transportadora=request.form.get("transportadora",""),
                 status=request.form.get("status","ativo"),
                 observacao=request.form.get("observacao",""),
                 representada=request.form.get("representada",""),

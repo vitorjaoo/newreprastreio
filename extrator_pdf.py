@@ -29,21 +29,28 @@ def extrair_dados_nf(arquivo_bytes: bytes, nome_arquivo: str) -> dict:
 
         pdf_b64 = base64.standard_b64encode(arquivo_bytes).decode("utf-8")
 
-        prompt = """Você é um extrator de dados de Notas Fiscais brasileiras (NF-e, NFS-e, CT-e).
-Analise este PDF e extraia os dados abaixo em formato JSON puro, sem markdown, sem explicações:
+        prompt = """Você é um especialista em leitura de DANFE (Documento Auxiliar da Nota Fiscal Eletrônica) brasileira.
+
+Analise este PDF de DANFE e extraia os seguintes dados em JSON puro, sem markdown, sem explicações:
 
 {
-  "numero_nf": "número da NF (ex: 000123)",
-  "serie": "série da NF (ex: 001)",
-  "valor_total": 0.00,
-  "data_emissao": "DD/MM/AAAA",
-  "cnpj_destinatario": "CNPJ do destinatário no formato 00.000.000/0001-00",
-  "nome_destinatario": "razão social do destinatário",
-  "cnpj_emitente": "CNPJ de quem emitiu a NF",
-  "nome_emitente": "razão social de quem emitiu (representada/fornecedor)"
+  "numero_nf": "número que aparece após 'Nº' no canto superior direito (ex: 000161759)",
+  "serie": "número de série que aparece após 'Série' (ex: 000)",
+  "valor_total": valor numérico do campo 'V. TOTAL DA NOTA' (ex: 1512.85),
+  "data_emissao": "data do campo 'DATA DA EMISSÃO' no formato DD/MM/AAAA",
+  "cnpj_destinatario": "CNPJ do bloco DESTINATÁRIO/REMETENTE no formato 00.000.000/0001-00",
+  "nome_destinatario": "NOME/RAZÃO SOCIAL do bloco DESTINATÁRIO/REMETENTE",
+  "cnpj_emitente": "CNPJ/CPF do emitente (bloco superior esquerdo com nome da empresa emitente)",
+  "nome_emitente": "nome da empresa emitente (bloco superior esquerdo, ex: S A S PLASTIC MATRIZ)",
+  "transportadora": "NOME/RAZÃO SOCIAL da transportadora no bloco TRANSPORTADOR/VOLUMES TRANSPORTADOS"
 }
 
-Se algum campo não for encontrado, use null.
+Observações importantes:
+- O número da NF fica no canto superior direito após 'Nº'
+- O CNPJ do emitente fica no campo 'CNPJ/CPF' do lado direito do cabeçalho
+- O valor total da nota fica na linha 'V. TOTAL DA NOTA' destacado
+- Se algum campo não for encontrado, use null
+
 Responda APENAS com o JSON, sem nenhum texto adicional."""
 
         payload = {
@@ -82,14 +89,15 @@ Responda APENAS com o JSON, sem nenhum texto adicional."""
         dados = json.loads(raw)
 
         return {
-            "numero_nf":    dados.get("numero_nf") or "",
-            "valor":        float(dados.get("valor_total") or 0),
-            "data_emissao": dados.get("data_emissao") or "",
-            "cnpj":         dados.get("cnpj_destinatario") or "",
-            "nome":         dados.get("nome_destinatario") or "",
-            "representada": dados.get("nome_emitente") or "",
-            "cnpj_emitente":dados.get("cnpj_emitente") or "",
-            "sucesso":      True,
+            "numero_nf":     dados.get("numero_nf") or "",
+            "valor":         float(dados.get("valor_total") or 0),
+            "data_emissao":  dados.get("data_emissao") or "",
+            "cnpj":          dados.get("cnpj_destinatario") or "",
+            "nome":          dados.get("nome_destinatario") or "",
+            "representada":  dados.get("nome_emitente") or "",
+            "cnpj_emitente": dados.get("cnpj_emitente") or "",
+            "transportadora":dados.get("transportadora") or "",
+            "sucesso":       True,
         }
 
     except Exception as e:
