@@ -20,19 +20,24 @@
 <div class="card">
   <div class="card-header">
     <span class="card-title">Cadastrar Nota Fiscal</span>
-    <span id="status-ia" style="font-size:.78rem;color:var(--gray-400)"></span>
+    <span id="status-ia" style="font-size:.78rem"></span>
   </div>
   <div class="card-body">
     <form method="POST" enctype="multipart/form-data" id="form-nf">
       <input type="hidden" name="tipo" value="nf">
 
-      <div class="form-group">
-        <label class="form-label">PDF da NF *</label>
-        <input class="form-control" type="file" name="arquivo"
-               accept=".pdf" required id="arquivo-nf"
-               onchange="extrairNF(this)">
-        <div id="loading-nf" style="display:none;margin-top:.5rem;font-size:.8rem;color:var(--gold)">
-          🤖 Gemini lendo o PDF... aguarde
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">PDF da NF * <span style="color:var(--gray-400);font-weight:400;text-transform:none">(download do cliente)</span></label>
+          <input class="form-control" type="file" name="arquivo" accept=".pdf" required id="arquivo-nf">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">XML da NF <span style="color:var(--gold);font-weight:400;text-transform:none">✨ preenche automático</span></label>
+          <input class="form-control" type="file" name="xml" accept=".xml" id="arquivo-xml"
+                 onchange="extrairXML(this)">
+          <div id="loading-xml" style="display:none;margin-top:.4rem;font-size:.78rem;color:var(--gold)">
+            ⚡ Lendo XML...
+          </div>
         </div>
       </div>
 
@@ -49,7 +54,7 @@
         <div class="form-group">
           <label class="form-label">Representada</label>
           <input class="form-control" type="text" name="representada"
-                 id="campo-representada" placeholder="Ex: Fornecedor ABC">
+                 id="campo-representada" placeholder="Preenchido pelo XML">
         </div>
       </div>
 
@@ -57,12 +62,12 @@
         <div class="form-group">
           <label class="form-label">Número da NF *</label>
           <input class="form-control" type="text" name="numero_nf"
-                 id="campo-numero-nf" placeholder="000123" required>
+                 id="campo-numero-nf" placeholder="Preenchido pelo XML" required>
         </div>
         <div class="form-group">
           <label class="form-label">Valor (R$)</label>
           <input class="form-control" type="number" name="valor"
-                 id="campo-valor-nf" step="0.01" min="0" placeholder="0,00">
+                 id="campo-valor-nf" step="0.01" min="0" placeholder="Preenchido pelo XML">
         </div>
       </div>
 
@@ -70,7 +75,7 @@
         <div class="form-group">
           <label class="form-label">Data de emissão</label>
           <input class="form-control" type="text" name="data_emissao"
-                 id="campo-data-nf" placeholder="DD/MM/AAAA">
+                 id="campo-data-nf" placeholder="Preenchido pelo XML">
         </div>
         <div class="form-group">
           <label class="form-label">Data prevista de entrega</label>
@@ -83,7 +88,7 @@
         <div class="form-group">
           <label class="form-label">Transportadora</label>
           <input class="form-control" type="text" name="transportadora"
-                 id="campo-transportadora" placeholder="Ex: Serra Brasil Transportes">
+                 id="campo-transportadora" placeholder="Preenchido pelo XML">
         </div>
         <div class="form-group">
           <label class="form-label">Status</label>
@@ -92,31 +97,21 @@
         </div>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-full" id="btn-salvar-nf">
-        💾 Salvar NF
-      </button>
+      <button type="submit" class="btn btn-primary btn-full">💾 Salvar NF</button>
     </form>
   </div>
 </div>
 
 {% else %}
 <div class="card">
-  <div class="card-header">
-    <span class="card-title">Cadastrar Boleto / Título</span>
-    <span id="status-ia-bol" style="font-size:.78rem;color:var(--gray-400)"></span>
-  </div>
+  <div class="card-header"><span class="card-title">Cadastrar Boleto / Título</span></div>
   <div class="card-body">
-    <form method="POST" enctype="multipart/form-data" id="form-bol">
+    <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="tipo" value="boleto">
 
       <div class="form-group">
         <label class="form-label">PDF do Boleto *</label>
-        <input class="form-control" type="file" name="arquivo"
-               accept=".pdf" required id="arquivo-bol"
-               onchange="extrairBoleto(this)">
-        <div id="loading-bol" style="display:none;margin-top:.5rem;font-size:.8rem;color:var(--gold)">
-          🤖 Gemini lendo o boleto... aguarde
-        </div>
+        <input class="form-control" type="file" name="arquivo" accept=".pdf" required>
       </div>
 
       <div class="form-row">
@@ -141,20 +136,18 @@
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Número do título *</label>
-          <input class="form-control" type="text" name="numero_titulo"
-                 id="campo-num-bol" required>
+          <input class="form-control" type="text" name="numero_titulo" required>
         </div>
         <div class="form-group">
           <label class="form-label">Valor (R$)</label>
-          <input class="form-control" type="number" name="valor"
-                 id="campo-val-bol" step="0.01" min="0">
+          <input class="form-control" type="number" name="valor" step="0.01" min="0">
         </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">Vencimento *</label>
         <input class="form-control" type="text" name="vencimento"
-               id="campo-venc-bol" placeholder="DD/MM/AAAA" required>
+               placeholder="DD/MM/AAAA" required>
       </div>
 
       <button type="submit" class="btn btn-primary btn-full">💾 Salvar Boleto</button>
@@ -168,32 +161,31 @@
 
 {% block scripts %}
 <script>
-// ── Extração NF ──────────────────────────────────────────────────────
-async function extrairNF(input) {
+// ── Extração via XML (principal) ─────────────────────────────────────
+async function extrairXML(input) {
   if (!input.files[0]) return;
-  const loading = document.getElementById('loading-nf');
+
+  const loading = document.getElementById('loading-xml');
   const status  = document.getElementById('status-ia');
   loading.style.display = 'block';
   status.textContent = '';
 
   const fd = new FormData();
-  fd.append('arquivo', input.files[0]);
-  fd.append('tipo', 'nf');
+  fd.append('xml', input.files[0]);
 
   try {
-    const res  = await fetch('/admin/extrair-pdf', { method: 'POST', body: fd });
+    const res  = await fetch('/admin/extrair-xml', { method: 'POST', body: fd });
     const data = await res.json();
-    console.log('Gemini retornou:', JSON.stringify(data));
 
     if (data.sucesso) {
-      // Preenche campos automaticamente
-      if (data.numero_nf)    document.getElementById('campo-numero-nf').value  = data.numero_nf;
-      if (data.valor)        document.getElementById('campo-valor-nf').value    = data.valor;
-      if (data.data_emissao) document.getElementById('campo-data-nf').value     = data.data_emissao;
-      if (data.representada)   document.getElementById('campo-representada').value   = data.representada;
-      if (data.transportadora) document.getElementById('campo-transportadora').value = data.transportadora;
+      if (data.numero_nf)     document.getElementById('campo-numero-nf').value     = data.numero_nf;
+      if (data.valor)         document.getElementById('campo-valor-nf').value       = data.valor;
+      if (data.data_emissao)  document.getElementById('campo-data-nf').value        = data.data_emissao;
+      if (data.representada)  document.getElementById('campo-representada').value   = data.representada;
+      if (data.transportadora)document.getElementById('campo-transportadora').value = data.transportadora;
 
-      // Tenta identificar o cliente pelo CNPJ
+      // Identifica cliente pelo CNPJ automaticamente
+      let clienteEncontrado = false;
       if (data.cnpj) {
         const cnpjLimpo = data.cnpj.replace(/\D/g, '');
         const opts = document.getElementById('cliente-nf').options;
@@ -201,63 +193,22 @@ async function extrairNF(input) {
           const optCnpj = (opts[i].dataset.cnpj || '').replace(/\D/g, '');
           if (optCnpj === cnpjLimpo) {
             document.getElementById('cliente-nf').value = opts[i].value;
-            status.textContent = '✅ Cliente identificado automaticamente';
-            status.style.color = 'var(--success)';
+            clienteEncontrado = true;
             break;
           }
         }
-        if (!status.textContent) {
-          status.textContent = '⚠️ Cliente não encontrado — selecione manualmente';
-          status.style.color = 'var(--warning)';
-        }
-      } else {
-        status.textContent = '✅ Dados extraídos — confira antes de salvar';
+      }
+
+      if (clienteEncontrado) {
+        status.textContent = '✅ XML lido — cliente identificado automaticamente!';
         status.style.color = 'var(--success)';
+      } else {
+        status.textContent = '✅ XML lido — selecione o cliente manualmente';
+        status.style.color = 'var(--warning)';
       }
-    }
-  } catch(e) {
-    status.textContent = 'Erro na extração — preencha manualmente';
-    status.style.color = 'var(--danger)';
-  } finally {
-    loading.style.display = 'none';
-  }
-}
-
-// ── Extração Boleto ──────────────────────────────────────────────────
-async function extrairBoleto(input) {
-  if (!input.files[0]) return;
-  const loading = document.getElementById('loading-bol');
-  const status  = document.getElementById('status-ia-bol');
-  loading.style.display = 'block';
-
-  const fd = new FormData();
-  fd.append('arquivo', input.files[0]);
-  fd.append('tipo', 'boleto');
-
-  try {
-    const res  = await fetch('/admin/extrair-pdf', { method: 'POST', body: fd });
-    const data = await res.json();
-
-    if (data.sucesso) {
-      if (data.numero_titulo) document.getElementById('campo-num-bol').value  = data.numero_titulo;
-      if (data.valor)         document.getElementById('campo-val-bol').value   = data.valor;
-      if (data.vencimento)    document.getElementById('campo-venc-bol').value  = data.vencimento;
-
-      // Tenta identificar cliente pelo CNPJ
-      if (data.cnpj) {
-        const cnpjLimpo = data.cnpj.replace(/\D/g, '');
-        const opts = document.getElementById('cliente-bol').options;
-        for (let i = 0; i < opts.length; i++) {
-          const optCnpj = (opts[i].dataset.cnpj || '').replace(/\D/g, '');
-          if (optCnpj === cnpjLimpo) {
-            document.getElementById('cliente-bol').value = opts[i].value;
-            await carregarNFs(opts[i].value, 'nf-vinc-bol');
-            break;
-          }
-        }
-      }
-      status.textContent = '✅ Dados extraídos';
-      status.style.color = 'var(--success)';
+    } else {
+      status.textContent = '⚠️ Erro no XML — preencha manualmente';
+      status.style.color = 'var(--danger)';
     }
   } catch(e) {
     status.textContent = 'Erro — preencha manualmente';
