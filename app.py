@@ -27,7 +27,7 @@ from flask import (Flask, render_template, request, redirect,
 
 import db
 from config import Config
-from extrator_pdf import extrair_dados_nf, extrair_dados_boleto, pdf_para_base64
+from extrator_pdf import extrair_dados_nf, extrair_dados_boleto, extrair_dados_xml, pdf_para_base64
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -482,6 +482,19 @@ def importar_clientes_excel(arquivo_bytes: bytes) -> dict:
     except Exception as e:
         return {"sucesso": False, "erro": str(e)}
 
+
+
+
+@app.route("/admin/extrair-xml", methods=["POST"])
+@login_admin_required
+def extrair_xml():
+    """Recebe XML da NF-e e extrai dados sem chamar nenhuma API"""
+    arquivo = request.files.get("xml")
+    if not arquivo or arquivo.filename == "":
+        return jsonify({"sucesso": False, "erro": "Nenhum arquivo"})
+    xml_bytes = arquivo.read()
+    dados = extrair_dados_xml(xml_bytes)
+    return jsonify(dados)
 
 
 @app.route("/admin/extrair-pdf", methods=["POST"])

@@ -202,3 +202,84 @@ def _campos_vazios_boleto() -> dict:
         "numero_titulo": "", "valor": 0.0,
         "vencimento": "", "cnpj": "", "nome": "", "sucesso": True,
     }
+
+
+def extrair_dados_xml(xml_bytes: bytes) -> dict:
+    """
+    Extrai dados da NF-e diretamente do XML.
+    Preciso, instantâneo e sem custo de API.
+    """
+    try:
+        import xml.etree.ElementTree as ET
+
+        # Remove BOM se existir
+        xml_str = xml_bytes.decode("utf-8-sig").strip()
+        root = ET.fromstring(xml_str)
+
+        # Namespace padrão NF-e
+        ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+
+        def find(tag):
+            el = root.find(f".//{{{ns['nfe']}}}{tag}")
+            if el is None:
+                el = root.find(f".//{tag}")
+            return el.text.strip() if el is not None and el.text else ""
+
+        # Número e série
+        numero_nf = find("nNF")
+        serie     = find("serie")
+
+        # Valor total
+        try:
+            valor = float(find("vNF") or 0)
+        except Exception:
+            valor = 0.0
+
+        # Data de emissão — converte AAAA-MM-DD para DD/MM/AAAA
+        data_raw  = find("dhEmi") or find("dEmi")
+        data_emissao = ""
+        if data_raw:
+            parte = data_raw[:10]  # pega só AAAA-MM-DD
+            try:
+                y, m, d = parte.split("-")
+                data_emissao = f"{d}/{m}/{y}"
+            except Exception:
+                data_emissao = parte
+
+        # Emitente (representada)
+        nome_emitente  = find("emit/xNome") or find("xNome")
+        cnpj_emitente  = find("emit/CNPJ")
+
+        # Destinatário
+        nome_dest  = find("dest/xNome")
+        cnpj_dest  = find("dest/CNPJ")
+        if not cnpj_dest:
+            cnpj_dest = find("dest/CPF")
+
+        # Formata CNPJ destinatário
+        if cnpj_dest and len(cnpj_dest) == 14:
+            c = cnpj_dest
+            cnpj_dest = f"{c[:2]}.{c[2:5]}.{c[5:8]}/{c[8:12]}-{c[12:]}"
+
+        # Transportadora
+        transportadora = find("transporta/xNome")
+
+        print(f"[extrator XML] NF {numero_nf} | {nome_emitente} → {nome_dest} | R$ {valor}")
+
+        return {
+            "numero_nf":     numero_nf,
+            "serie":         serie,
+            "valor":         valor,
+            "data_emissao":  data_emissao,
+            "cnpj":          cnpj_dest,
+            "nome":          nome_dest,
+            "representada":  nome_emitente,
+            "cnpj_emitente": cnpj_emitente,
+            "transportadora":transportadora,
+            "sucesso":       True,
+            "fonte":         "xml",
+        }
+
+    except Exception as e:
+        print(f"[extrator XML] Erro: {e}")
+        return {"sucesso": False, "erro": str(e)}
