@@ -211,18 +211,22 @@ def extrair_dados_xml(xml_bytes: bytes) -> dict:
     """
     try:
         import xml.etree.ElementTree as ET
+        import re
 
         # Remove BOM se existir
         xml_str = xml_bytes.decode("utf-8-sig").strip()
+        
+        # Remove a declaração XML para evitar o ValueError do ElementTree
+        xml_str = re.sub(r'<\?xml.*?\?>', '', xml_str)
+
+        # Remove o namespace (xmlns="...") para simplificar e corrigir o XPath
+        xml_str = re.sub(r'\sxmlns="[^"]+"', '', xml_str)
+
         root = ET.fromstring(xml_str)
 
-        # Namespace padrão NF-e
-        ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
-
         def find(tag):
-            el = root.find(f".//{{{ns['nfe']}}}{tag}")
-            if el is None:
-                el = root.find(f".//{tag}")
+            # Como removemos o namespace, a busca com .// funciona direto para qualquer nó
+            el = root.find(f".//{tag}")
             return el.text.strip() if el is not None and el.text else ""
 
         # Número e série
