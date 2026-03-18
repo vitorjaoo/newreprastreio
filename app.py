@@ -27,6 +27,7 @@ from flask import (Flask, render_template, request, redirect,
 
 import db
 from config import Config
+from extrator_pdf import extrair_dados_nf, extrair_dados_boleto, pdf_para_base64
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -478,6 +479,23 @@ def importar_clientes_excel(arquivo_bytes: bytes) -> dict:
         return {"clientes": clientes, "erros": erros, "sucesso": True}
     except Exception as e:
         return {"sucesso": False, "erro": str(e)}
+
+
+
+@app.route("/admin/extrair-pdf", methods=["POST"])
+@login_admin_required
+def extrair_pdf():
+    """Recebe PDF via AJAX, extrai dados com Gemini e retorna JSON"""
+    arquivo = request.files.get("arquivo")
+    tipo    = request.form.get("tipo", "nf")
+    if not arquivo or arquivo.filename == "":
+        return jsonify({"sucesso": False, "erro": "Nenhum arquivo"})
+    pdf_bytes = arquivo.read()
+    if tipo == "nf":
+        dados = extrair_dados_nf(pdf_bytes, arquivo.filename)
+    else:
+        dados = extrair_dados_boleto(pdf_bytes, arquivo.filename)
+    return jsonify(dados)
 
 
 if __name__ == "__main__":
