@@ -64,7 +64,7 @@ Responda APENAS com o JSON, sem nenhum texto adicional."""
             }
         }
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         data = json.dumps(payload).encode("utf-8")
 
         req = urllib.request.Request(
@@ -144,7 +144,7 @@ Responda APENAS com o JSON, sem nenhum texto adicional."""
             }
         }
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
         data = json.dumps(payload).encode("utf-8")
 
         req = urllib.request.Request(
