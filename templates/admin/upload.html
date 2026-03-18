@@ -79,10 +79,17 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label class="form-label">Status</label>
-        <input class="form-control" type="text" name="status"
-               placeholder="Ex: Em separação, Saiu para entrega..." value="ativo">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Transportadora</label>
+          <input class="form-control" type="text" name="transportadora"
+                 id="campo-transportadora" placeholder="Ex: Serra Brasil Transportes">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <input class="form-control" type="text" name="status"
+                 placeholder="Ex: Em separação, Saiu para entrega..." value="ativo">
+        </div>
       </div>
 
       <button type="submit" class="btn btn-primary btn-full" id="btn-salvar-nf">
@@ -182,7 +189,8 @@ async function extrairNF(input) {
       if (data.numero_nf)    document.getElementById('campo-numero-nf').value  = data.numero_nf;
       if (data.valor)        document.getElementById('campo-valor-nf').value    = data.valor;
       if (data.data_emissao) document.getElementById('campo-data-nf').value     = data.data_emissao;
-      if (data.representada) document.getElementById('campo-representada').value = data.representada;
+      if (data.representada)   document.getElementById('campo-representada').value   = data.representada;
+      if (data.transportadora) document.getElementById('campo-transportadora').value = data.transportadora;
 
       // Tenta identificar o cliente pelo CNPJ
       if (data.cnpj) {
