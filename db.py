@@ -344,6 +344,9 @@ def toggle_cliente_ativo(cliente_id: int):
 
 def deletar_nf(nf_id: int):
     conn = get_conn()
+    # Deleta títulos e eventos vinculados primeiro
+    conn.execute("DELETE FROM titulos WHERE nf_id=?", [nf_id])
+    conn.execute("DELETE FROM rastreio_eventos WHERE nf_id=?", [nf_id])
     conn.execute("DELETE FROM notas_fiscais WHERE id=?", [nf_id])
     conn.commit()
 
