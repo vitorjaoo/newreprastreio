@@ -97,7 +97,9 @@
         </div>
       </div>
 
-      <button type="submit" class="btn btn-primary btn-full">💾 Salvar NF</button>
+      <input type="hidden" name="duplicatas_json" id="duplicatas-json" value="">
+      <div id="parcelas-container"></div>
+      <button type="submit" class="btn btn-primary btn-full" style="margin-top:1rem">💾 Salvar NF e Parcelas</button>
     </form>
   </div>
 </div>
@@ -149,6 +151,11 @@
         <input class="form-control" type="text" name="vencimento"
                placeholder="DD/MM/AAAA" required>
       </div>
+      <div class="form-group">
+        <label class="form-label">Representada</label>
+        <input class="form-control" type="text" name="representada_bol"
+               placeholder="Ex: HD Ferragens">
+      </div>
 
       <button type="submit" class="btn btn-primary btn-full">💾 Salvar Boleto</button>
     </form>
@@ -199,8 +206,30 @@ async function extrairXML(input) {
         }
       }
 
+      // Mostra parcelas extraídas
+      const parcDiv = document.getElementById('parcelas-container');
+      if (data.duplicatas && data.duplicatas.length > 0) {
+        let html = `<div style="margin-top:1rem;padding:1rem;background:var(--gray-50);border-radius:8px;border:1px solid var(--gray-200)">
+          <div style="font-size:.8rem;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">
+            📋 ${data.duplicatas.length} parcela(s) encontrada(s) — serão cadastradas automaticamente
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.5rem">`;
+        data.duplicatas.forEach(d => {
+          const val = parseFloat(d.valor).toLocaleString('pt-BR', {style:'currency',currency:'BRL'});
+          html += `<div style="background:white;padding:.5rem .75rem;border-radius:6px;border:1px solid var(--gray-200);font-size:.8rem">
+            <div style="font-weight:600;color:var(--gray-800)">Parcela ${d.numero}</div>
+            <div style="color:var(--gray-600)">${val}</div>
+            <div style="color:var(--gray-400)">${d.vencimento}</div>
+          </div>`;
+        });
+        html += '</div></div>';
+        parcDiv.innerHTML = html;
+        // Salva as duplicatas para enviar com o form
+        document.getElementById('duplicatas-json').value = JSON.stringify(data.duplicatas);
+      }
+
       if (clienteEncontrado) {
-        status.textContent = '✅ XML lido — cliente identificado automaticamente!';
+        status.textContent = '✅ XML lido — cliente e parcelas identificados!';
         status.style.color = 'var(--success)';
       } else {
         status.textContent = '✅ XML lido — selecione o cliente manualmente';
