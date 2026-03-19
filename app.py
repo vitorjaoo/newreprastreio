@@ -327,7 +327,9 @@ def admin_upload():
 
             if xml_file and xml_file.filename:
                 try:
+                    xml_file.seek(0)
                     xml_bytes = xml_file.read()
+                    print(f"[upload] XML recebido: {len(xml_bytes)} bytes")
                     dados_xml = extrair_dados_xml(xml_bytes)
                     duplicatas = dados_xml.get("duplicatas", [])
                     numero_nf  = request.form.get("numero_nf", "")
