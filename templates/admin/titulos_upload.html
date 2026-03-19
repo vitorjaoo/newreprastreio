@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Upload de Títulos{% endblock %}
+{% block page_title %}Upload de Títulos{% endblock %}
+
+{% block content %}
+<div style="max-width:800px">
+
+{% if not dados_xml %}
+{# ── Etapa 1: Selecionar XML ── #}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Identificar parcelas via XML</span>
+    <span style="font-size:.75rem;color:var(--gold)">✨ Preenche automaticamente</span>
+  </div>
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data">
+      <input type="hidden" name="etapa" value="1">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <select class="form-control" name="cliente_id" required>
+            <option value="">Selecione...</option>
+            {% for c in clientes %}
+            <option value="{{ c.id }}">{{ c.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">XML da NF-e *</label>
+          <input class="form-control" type="file" name="xml" accept=".xml" required>
+        </div>
+      </div>
+      <p class="text-muted" style="margin-bottom:1rem">
+        O sistema vai ler o XML e abrir um campo de boleto para cada parcela encontrada.
+      </p>
+      <button type="submit" class="btn btn-primary">⚡ Ler XML e identificar parcelas</button>
+    </form>
+  </div>
+</div>
+
+{% else %}
+{# ── Etapa 2: Upload dos boletos ── #}
+<div class="alert alert-success">
+  ✅ XML lido — <strong>{{ dados_xml.duplicatas|length }} parcela(s)</strong> encontrada(s)
+  para <strong>{{ dados_xml.representada }}</strong> (NF {{ dados_xml.numero_nf }})
+</div>
+
+<form method="POST" enctype="multipart/form-data">
+  <input type="hidden" name="etapa" value="2">
+  <input type="hidden" name="cliente_id" value="{{ cliente_id }}">
+  <input type="hidden" name="representada" value="{{ dados_xml.representada }}">
+  <input type="hidden" name="numero_nf" value="{{ dados_xml.numero_nf }}">
+
+  {% for dup in dados_xml.duplicatas %}
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-header">
+      <span class="card-title">Parcela {{ dup.numero }}</span>
+      <div style="display:flex;gap:1rem;font-size:.875rem">
+        <span style="font-weight:700">R$ {{ "%.2f"|format(dup.valor|float)|replace('.', ',') }}</span>
+        <span style="color:var(--gray-400)">Vence: {{ dup.vencimento }}</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Número do título</label>
+          <input class="form-control" type="text"
+                 name="numero_titulo_{{ loop.index }}"
+                 value="{{ dados_xml.numero_nf }}-{{ dup.numero }}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vencimento</label>
+          <input class="form-control" type="text"
+                 name="vencimento_{{ loop.index }}"
+                 value="{{ dup.vencimento }}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Valor (R$)</label>
+          <input class="form-control" type="number"
+                 name="valor_{{ loop.index }}"
+                 value="{{ dup.valor }}" step="0.01" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">PDF do Boleto</label>
+          <input class="form-control" type="file"
+                 name="boleto_{{ loop.index }}" accept=".pdf">
+          <div class="text-muted" style="margin-top:3px">Opcional — pode subir depois</div>
+        </div>
+      </div>
+      <input type="hidden" name="total_parcelas" value="{{ dados_xml.duplicatas|length }}">
+    </div>
+  </div>
+  {% endfor %}
+
+  <div style="display:flex;gap:1rem">
+    <a href="{{ url_for('admin_titulos_upload') }}" class="btn btn-outline">← Recomeçar</a>
+    <button type="submit" class="btn btn-primary">
+      💾 Salvar {{ dados_xml.duplicatas|length }} título(s)
+    </button>
+  </div>
+</form>
+{% endif %}
+
+</div>
+{% endblock %}
