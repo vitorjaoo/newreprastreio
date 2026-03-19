@@ -325,16 +325,16 @@ def admin_upload():
             xml_file = request.files.get("xml")
             duplicatas_criadas = 0
 
-            if xml_file and xml_file.filename:
-                try:
-                    xml_file.seek(0)
-                    xml_bytes = xml_file.read()
-                    print(f"[upload] XML recebido: {len(xml_bytes)} bytes")
-                    dados_xml = extrair_dados_xml(xml_bytes)
-                    duplicatas = dados_xml.get("duplicatas", [])
-                    numero_nf  = request.form.get("numero_nf", "")
-                    representada = request.form.get("representada", "")
+            # Tenta pegar duplicatas do campo hidden (preenchido pelo JS)
+            import json as _json
+            duplicatas_raw = request.form.get("duplicatas_json", "").strip()
+            print(f"[upload] duplicatas_json recebido: {duplicatas_raw[:200] if duplicatas_raw else 'VAZIO'}")
 
+            if duplicatas_raw:
+                try:
+                    duplicatas = _json.loads(duplicatas_raw)
+                    numero_nf    = request.form.get("numero_nf", "")
+                    representada = request.form.get("representada", "")
                     for dup in duplicatas:
                         numero_titulo = f"{numero_nf}-{dup.get('numero','')}"
                         db.inserir_titulo(
@@ -348,8 +348,36 @@ def admin_upload():
                             representada=representada,
                         )
                         duplicatas_criadas += 1
+                    print(f"[upload] {duplicatas_criadas} parcelas criadas")
                 except Exception as e:
-                    print(f"[upload] Erro ao processar duplicatas: {e}")
+                    print(f"[upload] Erro parcelas: {e}")
+            else:
+                # Fallback: tenta ler o XML diretamente
+                if xml_file and xml_file.filename:
+                    try:
+                        xml_file.seek(0)
+                        xml_bytes = xml_file.read()
+                        print(f"[upload] Fallback XML: {len(xml_bytes)} bytes")
+                        dados_xml = extrair_dados_xml(xml_bytes)
+                        duplicatas = dados_xml.get("duplicatas", [])
+                        numero_nf    = request.form.get("numero_nf", "")
+                        representada = request.form.get("representada", "")
+                        for dup in duplicatas:
+                            numero_titulo = f"{numero_nf}-{dup.get('numero','')}"
+                            db.inserir_titulo(
+                                cliente_id=int(cliente_id),
+                                numero_titulo=numero_titulo,
+                                valor=float(dup.get("valor", 0)),
+                                vencimento=dup.get("vencimento", ""),
+                                boleto_base64="",
+                                nome_arquivo="",
+                                nf_id=nf_id_salvo,
+                                representada=representada,
+                            )
+                            duplicatas_criadas += 1
+                        print(f"[upload] Fallback: {duplicatas_criadas} parcelas criadas")
+                    except Exception as e:
+                        print(f"[upload] Erro fallback: {e}")
 
             if duplicatas_criadas > 0:
                 flash(f"NF {request.form.get('numero_nf')} salva com {duplicatas_criadas} parcela(s)!", "sucesso")
