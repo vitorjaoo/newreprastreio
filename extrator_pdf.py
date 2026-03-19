@@ -211,22 +211,18 @@ def extrair_dados_xml(xml_bytes: bytes) -> dict:
     """
     try:
         import xml.etree.ElementTree as ET
-        import re
 
         # Remove BOM se existir
         xml_str = xml_bytes.decode("utf-8-sig").strip()
-        
-        # Remove a declaração XML para evitar o ValueError do ElementTree
-        xml_str = re.sub(r'<\?xml.*?\?>', '', xml_str)
-
-        # Remove o namespace (xmlns="...") para simplificar e corrigir o XPath
-        xml_str = re.sub(r'\sxmlns="[^"]+"', '', xml_str)
-
         root = ET.fromstring(xml_str)
 
+        # Namespace padrão NF-e
+        ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
+
         def find(tag):
-            # Como removemos o namespace, a busca com .// funciona direto para qualquer nó
-            el = root.find(f".//{tag}")
+            el = root.find(f".//{{{ns['nfe']}}}{tag}")
+            if el is None:
+                el = root.find(f".//{tag}")
             return el.text.strip() if el is not None and el.text else ""
 
         # Número e série
@@ -268,7 +264,26 @@ def extrair_dados_xml(xml_bytes: bytes) -> dict:
         # Transportadora
         transportadora = find("transporta/xNome")
 
-        print(f"[extrator XML] NF {numero_nf} | {nome_emitente} → {nome_dest} | R$ {valor}")
+        # Extrai duplicatas (parcelas/títulos)
+        duplicatas = []
+        for dup in root.findall(f".//{{{ns['nfe']}}}dup"):
+            n_dup  = dup.find(f"{{{ns['nfe']}}}nDup")
+            d_venc = dup.find(f"{{{ns['nfe']}}}dVenc")
+            v_dup  = dup.find(f"{{{ns['nfe']}}}vDup")
+            if d_venc is not None and v_dup is not None:
+                # Converte data AAAA-MM-DD para DD/MM/AAAA
+                try:
+                    y, m, d = d_venc.text[:10].split("-")
+                    venc_fmt = f"{d}/{m}/{y}"
+                except Exception:
+                    venc_fmt = d_venc.text
+                duplicatas.append({
+                    "numero": n_dup.text if n_dup is not None else "",
+                    "vencimento": venc_fmt,
+                    "valor": float(v_dup.text or 0),
+                })
+
+        print(f"[extrator XML] NF {numero_nf} | {nome_emitente} → {nome_dest} | R$ {valor} | {len(duplicatas)} parcela(s)")
 
         return {
             "numero_nf":     numero_nf,
@@ -280,6 +295,7 @@ def extrair_dados_xml(xml_bytes: bytes) -> dict:
             "representada":  nome_emitente,
             "cnpj_emitente": cnpj_emitente,
             "transportadora":transportadora,
+            "duplicatas":    duplicatas,
             "sucesso":       True,
             "fonte":         "xml",
         }
