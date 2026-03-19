@@ -321,26 +321,36 @@ def admin_upload():
             )
             nf_id_salvo = db.get_ultimo_nf_id(int(cliente_id))
 
-            # Cadastra duplicatas automaticamente se vieram do XML
-            import json as _json
-            duplicatas_raw = request.form.get("duplicatas_json", "")
-            if duplicatas_raw:
+            # Processa XML enviado junto com o formulário para extrair duplicatas
+            xml_file = request.files.get("xml")
+            duplicatas_criadas = 0
+
+            if xml_file and xml_file.filename:
                 try:
-                    duplicatas = _json.loads(duplicatas_raw)
+                    xml_bytes = xml_file.read()
+                    dados_xml = extrair_dados_xml(xml_bytes)
+                    duplicatas = dados_xml.get("duplicatas", [])
+                    numero_nf  = request.form.get("numero_nf", "")
+                    representada = request.form.get("representada", "")
+
                     for dup in duplicatas:
-                        numero_titulo = f"{request.form.get('numero_nf','')}-{dup.get('numero','')}"
+                        numero_titulo = f"{numero_nf}-{dup.get('numero','')}"
                         db.inserir_titulo(
-                            cliente_id=cliente_id,
+                            cliente_id=int(cliente_id),
                             numero_titulo=numero_titulo,
                             valor=float(dup.get("valor", 0)),
                             vencimento=dup.get("vencimento", ""),
                             boleto_base64="",
                             nome_arquivo="",
                             nf_id=nf_id_salvo,
+                            representada=representada,
                         )
-                    flash(f"NF {request.form.get('numero_nf')} salva com {len(duplicatas)} parcela(s)!", "sucesso")
+                        duplicatas_criadas += 1
                 except Exception as e:
-                    flash(f"NF salva! Erro nas parcelas: {e}", "sucesso")
+                    print(f"[upload] Erro ao processar duplicatas: {e}")
+
+            if duplicatas_criadas > 0:
+                flash(f"NF {request.form.get('numero_nf')} salva com {duplicatas_criadas} parcela(s)!", "sucesso")
             else:
                 flash(f"NF {request.form.get('numero_nf')} salva com sucesso!", "sucesso")
 
