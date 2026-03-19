@@ -319,7 +319,30 @@ def admin_upload():
                 observacao=request.form.get("observacao",""),
                 representada=request.form.get("representada",""),
             )
-            flash(f"NF {request.form.get('numero_nf')} salva com sucesso!", "sucesso")
+            nf_id_salvo = db.get_ultimo_nf_id(int(cliente_id))
+
+            # Cadastra duplicatas automaticamente se vieram do XML
+            import json as _json
+            duplicatas_raw = request.form.get("duplicatas_json", "")
+            if duplicatas_raw:
+                try:
+                    duplicatas = _json.loads(duplicatas_raw)
+                    for dup in duplicatas:
+                        numero_titulo = f"{request.form.get('numero_nf','')}-{dup.get('numero','')}"
+                        db.inserir_titulo(
+                            cliente_id=cliente_id,
+                            numero_titulo=numero_titulo,
+                            valor=float(dup.get("valor", 0)),
+                            vencimento=dup.get("vencimento", ""),
+                            boleto_base64="",
+                            nome_arquivo="",
+                            nf_id=nf_id_salvo,
+                        )
+                    flash(f"NF {request.form.get('numero_nf')} salva com {len(duplicatas)} parcela(s)!", "sucesso")
+                except Exception as e:
+                    flash(f"NF salva! Erro nas parcelas: {e}", "sucesso")
+            else:
+                flash(f"NF {request.form.get('numero_nf')} salva com sucesso!", "sucesso")
 
         elif tipo == "boleto":
             nf_id = request.form.get("nf_id")
@@ -331,6 +354,7 @@ def admin_upload():
                 boleto_base64=pdf_b64,
                 nome_arquivo=arquivo.filename,
                 nf_id=int(nf_id) if nf_id else None,
+                representada=request.form.get("representada_bol",""),
             )
             flash(f"Boleto {request.form.get('numero_titulo')} salvo!", "sucesso")
 

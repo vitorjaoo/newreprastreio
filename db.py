@@ -87,11 +87,17 @@ def criar_tabelas():
             boleto_base64   TEXT,
             nome_arquivo    TEXT,
             nf_id           INTEGER,
+            representada    TEXT,
             criado_em       TEXT DEFAULT (datetime('now')),
             FOREIGN KEY (cliente_id) REFERENCES clientes(id),
             FOREIGN KEY (nf_id)      REFERENCES notas_fiscais(id)
         )
     """)
+    try:
+        conn.execute("ALTER TABLE titulos ADD COLUMN representada TEXT")
+        conn.commit()
+    except Exception:
+        pass
     # Migrações seguras para tabelas já existentes
     for col in ["observacao TEXT", "representada TEXT"]:
         try:
@@ -171,6 +177,17 @@ def inserir_nf(cliente_id, numero_nf, valor, data_emissao, pdf_base64,
     conn.commit()
 
 
+def get_ultimo_nf_id(cliente_id: int):
+    """Retorna o ID da NF mais recente do cliente"""
+    conn = get_conn()
+    cur = conn.execute(
+        "SELECT id FROM notas_fiscais WHERE cliente_id=? ORDER BY id DESC LIMIT 1",
+        [cliente_id]
+    )
+    rows = _rows_to_dicts(cur)
+    return rows[0]["id"] if rows else None
+
+
 def atualizar_status_nf(nf_id, status, observacao=""):
     conn = get_conn()
     conn.execute(
@@ -244,9 +261,12 @@ def deletar_evento_rastreio(evento_id: int):
 def listar_titulos(cliente_id: int):
     conn = get_conn()
     cur = conn.execute(
-        """SELECT id, numero_titulo, valor, vencimento, status,
-                  nome_arquivo, nf_id, criado_em
-           FROM titulos WHERE cliente_id = ? ORDER BY vencimento ASC""",
+        """SELECT t.id, t.numero_titulo, t.valor, t.vencimento, t.status,
+                  t.nome_arquivo, t.nf_id, t.representada, t.criado_em,
+                  nf.numero_nf
+           FROM titulos t
+           LEFT JOIN notas_fiscais nf ON nf.id = t.nf_id
+           WHERE t.cliente_id = ? ORDER BY t.vencimento ASC""",
         [cliente_id]
     )
     return _rows_to_dicts(cur)
@@ -265,15 +285,15 @@ def listar_todos_titulos():
 
 
 def inserir_titulo(cliente_id, numero_titulo, valor, vencimento,
-                   boleto_base64, nome_arquivo, nf_id=None):
+                   boleto_base64, nome_arquivo, nf_id=None, representada=""):
     conn = get_conn()
     conn.execute(
         """INSERT INTO titulos
            (cliente_id, numero_titulo, valor, vencimento,
-            boleto_base64, nome_arquivo, nf_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            boleto_base64, nome_arquivo, nf_id, representada)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
         [cliente_id, numero_titulo, valor, vencimento,
-         boleto_base64, nome_arquivo, nf_id]
+         boleto_base64, nome_arquivo, nf_id, representada]
     )
     conn.commit()
 
