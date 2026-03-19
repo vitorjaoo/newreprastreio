@@ -26,9 +26,17 @@
           </td>
           <td>{{ nf.observacao or '—' }}</td>
           <td>
-            <button class="btn btn-outline btn-sm" onclick="editarNF({{ nf.id }}, '{{ nf.status or '' }}', '{{ nf.observacao or '' }}', '{{ nf.representada or '' }}')">
-              Editar
-            </button>
+            <div style="display:flex;gap:.5rem">
+              <button class="btn btn-outline btn-sm" onclick="editarNF({{ nf.id }}, '{{ nf.status or '' }}', '{{ nf.observacao or '' }}', '{{ nf.representada or '' }}')">
+                Editar
+              </button>
+              <form method="POST" action="{{ url_for('admin_deletar_nf', nf_id=nf.id) }}" style="display:inline"
+                    onsubmit="return confirm('Deletar NF {{ nf.numero_nf }}? Esta ação não pode ser desfeita.')">
+                <button type="submit" class="btn btn-sm" style="color:var(--danger);border-color:var(--danger)">
+                  🗑️ Deletar
+                </button>
+              </form>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -73,7 +81,7 @@
 <script>
 function editarNF(id, status, obs, rep) {
   document.getElementById('edit-id').value = id;
-  document.getElementById('edit-status').value = status;
+  document.getElementById('edit-status').value = status || 'Faturado';
   document.getElementById('edit-obs').value = obs;
   document.getElementById('edit-rep').value = rep;
   const overlay = document.getElementById('modal-overlay');

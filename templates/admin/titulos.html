@@ -19,6 +19,21 @@
   </div>
 </div>
 
+{% set pendentes = titulos|selectattr('status','equalto','aguardando_confirmacao')|list %}
+{% if pendentes %}
+<div class="alert alert-warning" style="margin-bottom:1.5rem">
+  🔔 <strong>{{ pendentes|length }} pagamento(s) aguardando sua confirmação</strong>
+  {% for t in pendentes %}
+  <div style="margin-top:.5rem;display:flex;align-items:center;justify-content:space-between;background:white;padding:.5rem 1rem;border-radius:8px;border:1px solid var(--gray-200)">
+    <span><strong>{{ t.cliente }}</strong> — {{ t.numero_titulo }} — R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}</span>
+    <form method="POST" action="{{ url_for('admin_validar_pagamento', titulo_id=t.id) }}">
+      <button type="submit" class="btn btn-success btn-sm">✅ Confirmar pagamento</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if titulos %}
 <div class="card">
   <div class="card-header"><span class="card-title">Todos os títulos</span></div>
