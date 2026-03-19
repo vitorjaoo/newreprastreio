@@ -115,22 +115,32 @@
             {% endif %}
           </td>
 
-          {# Download #}
+          {# Ações #}
           <td style="padding:.875rem 1rem">
-            {% if t.status == 'aberto' %}
-              {% set tem_boleto = t.nome_arquivo and t.nome_arquivo != '' %}
-              {% if tem_boleto %}
-              <a href="{{ url_for('download_boleto', titulo_id=t.id) }}"
-                 class="btn btn-outline btn-sm">
-                <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-                Boleto
-              </a>
+            <div style="display:flex;flex-direction:column;gap:.4rem">
+              {% if t.status == 'aberto' %}
+                {% if t.nome_arquivo %}
+                <a href="{{ url_for('download_boleto', titulo_id=t.id) }}"
+                   class="btn btn-outline btn-sm">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                  Boleto
+                </a>
+                {% else %}
+                <span style="font-size:.75rem;color:var(--gray-300)">Boleto pendente</span>
+                {% endif %}
+                <form method="POST" action="{{ url_for('solicitar_pagamento', titulo_id=t.id) }}"
+                      onsubmit="return confirm('Confirmar que este título foi pago?')">
+                  <button type="submit" class="btn btn-sm"
+                          style="background:var(--gold-lt);color:#7A5C00;border-color:var(--gold-mid);width:100%">
+                    💰 Já paguei
+                  </button>
+                </form>
+              {% elif t.status == 'aguardando_confirmacao' %}
+                <span style="font-size:.75rem;color:#5B21B6;font-weight:600">⏳ Aguardando<br>confirmação</span>
               {% else %}
-              <span style="font-size:.75rem;color:var(--gray-300)">Aguardando</span>
+                <span style="font-size:.75rem;color:var(--gray-300)">—</span>
               {% endif %}
-            {% else %}
-              <span style="font-size:.75rem;color:var(--gray-300)">—</span>
-            {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
