@@ -225,7 +225,9 @@ async function extrairXML(input) {
         html += '</div></div>';
         parcDiv.innerHTML = html;
         // Salva as duplicatas para enviar com o form
-        document.getElementById('duplicatas-json').value = JSON.stringify(data.duplicatas);
+        const dupJson = JSON.stringify(data.duplicatas);
+        document.getElementById('duplicatas-json').value = dupJson;
+        console.log('[upload] duplicatas salvas no hidden:', dupJson.substring(0,100));
       }
 
       if (clienteEncontrado) {
