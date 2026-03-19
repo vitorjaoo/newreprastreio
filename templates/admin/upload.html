@@ -20,41 +20,52 @@
 <div class="card">
   <div class="card-header">
     <span class="card-title">Cadastrar Nota Fiscal</span>
-    <span id="status-ia" style="font-size:.78rem"></span>
+    <span style="font-size:.75rem;color:var(--gold)">✨ Upload do XML preenche tudo</span>
   </div>
   <div class="card-body">
-    <form method="POST" enctype="multipart/form-data" id="form-nf">
+    <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="tipo" value="nf">
+
+      {# Pré-preenchimento via XML — etapa 1 #}
+      {% if dados_xml %}
+      <div style="background:var(--success-lt);border:1px solid var(--success);border-radius:8px;padding:1rem;margin-bottom:1rem;font-size:.85rem;color:var(--success)">
+        ✅ XML lido — dados preenchidos automaticamente. Confira e salve.
+      </div>
+      {% endif %}
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
         <div class="form-group" style="margin-bottom:0">
-          <label class="form-label">PDF da NF * <span style="color:var(--gray-400);font-weight:400;text-transform:none">(download do cliente)</span></label>
-          <input class="form-control" type="file" name="arquivo" accept=".pdf" required id="arquivo-nf">
+          <label class="form-label">PDF da NF * <span style="color:var(--gray-400);font-weight:400;text-transform:none">(cliente baixa)</span></label>
+          <input class="form-control" type="file" name="arquivo" accept=".pdf"
+                 {% if not dados_xml %}required{% endif %}>
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">XML da NF <span style="color:var(--gold);font-weight:400;text-transform:none">✨ preenche automático</span></label>
-          <input class="form-control" type="file" name="xml" accept=".xml" id="arquivo-xml"
-                 onchange="extrairXML(this)">
-          <div id="loading-xml" style="display:none;margin-top:.4rem;font-size:.78rem;color:var(--gold)">
-            ⚡ Lendo XML...
-          </div>
+          <input class="form-control" type="file" name="xml" accept=".xml">
         </div>
       </div>
 
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Cliente *</label>
-          <select class="form-control" name="cliente_id" id="cliente-nf" required>
+          <select class="form-control" name="cliente_id" required>
             <option value="">Selecione...</option>
             {% for c in clientes %}
-            <option value="{{ c.id }}" data-cnpj="{{ c.cnpj }}">{{ c.nome }}</option>
+            <option value="{{ c.id }}"
+              data-cnpj="{{ c.cnpj }}"
+              {% if dados_xml and dados_xml.cnpj and c.cnpj.replace('.','').replace('/','').replace('-','') == dados_xml.cnpj.replace('.','').replace('/','').replace('-','') %}
+                selected
+              {% endif %}>
+              {{ c.nome }}
+            </option>
             {% endfor %}
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Representada</label>
           <input class="form-control" type="text" name="representada"
-                 id="campo-representada" placeholder="Preenchido pelo XML">
+                 value="{{ dados_xml.representada if dados_xml else '' }}"
+                 placeholder="Ex: HD Ferragens">
         </div>
       </div>
 
@@ -62,12 +73,14 @@
         <div class="form-group">
           <label class="form-label">Número da NF *</label>
           <input class="form-control" type="text" name="numero_nf"
-                 id="campo-numero-nf" placeholder="Preenchido pelo XML" required>
+                 value="{{ dados_xml.numero_nf if dados_xml else '' }}"
+                 placeholder="000123" required>
         </div>
         <div class="form-group">
           <label class="form-label">Valor (R$)</label>
           <input class="form-control" type="number" name="valor"
-                 id="campo-valor-nf" step="0.01" min="0" placeholder="Preenchido pelo XML">
+                 value="{{ dados_xml.valor if dados_xml else '' }}"
+                 step="0.01" min="0">
         </div>
       </div>
 
@@ -75,7 +88,8 @@
         <div class="form-group">
           <label class="form-label">Data de emissão</label>
           <input class="form-control" type="text" name="data_emissao"
-                 id="campo-data-nf" placeholder="Preenchido pelo XML">
+                 value="{{ dados_xml.data_emissao if dados_xml else '' }}"
+                 placeholder="DD/MM/AAAA">
         </div>
         <div class="form-group">
           <label class="form-label">Data prevista de entrega</label>
@@ -88,18 +102,39 @@
         <div class="form-group">
           <label class="form-label">Transportadora</label>
           <input class="form-control" type="text" name="transportadora"
-                 id="campo-transportadora" placeholder="Preenchido pelo XML">
+                 value="{{ dados_xml.transportadora if dados_xml else '' }}"
+                 placeholder="Ex: Serra Brasil Transportes">
         </div>
         <div class="form-group">
           <label class="form-label">Status</label>
           <input class="form-control" type="text" name="status"
-                 placeholder="Ex: Em separação, Saiu para entrega..." value="ativo">
+                 value="ativo" placeholder="Ex: Em separação...">
         </div>
       </div>
 
-      <input type="hidden" name="duplicatas_json" id="duplicatas-json" value="">
-      <div id="parcelas-container"></div>
-      <button type="submit" class="btn btn-primary btn-full" style="margin-top:1rem">💾 Salvar NF e Parcelas</button>
+      {% if dados_xml and dados_xml.duplicatas %}
+      <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:8px;padding:1rem;margin-bottom:1rem">
+        <div style="font-size:.8rem;font-weight:600;color:var(--gray-600);margin-bottom:.75rem">
+          📋 {{ dados_xml.duplicatas|length }} parcela(s) encontrada(s) — serão cadastradas automaticamente
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.5rem">
+          {% for dup in dados_xml.duplicatas %}
+          <div style="background:white;padding:.5rem .75rem;border-radius:6px;border:1px solid var(--gray-200);font-size:.8rem">
+            <div style="font-weight:600">Parcela {{ dup.numero }}</div>
+            <div style="color:var(--gray-600)">R$ {{ "%.2f"|format(dup.valor|float)|replace('.', ',') }}</div>
+            <div style="color:var(--gray-400)">{{ dup.vencimento }}</div>
+          </div>
+          {% endfor %}
+        </div>
+        {# Passa duplicatas como JSON hidden #}
+        <input type="hidden" name="duplicatas_json"
+               value='{{ dados_xml.duplicatas | tojson }}'>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary btn-full">
+        💾 Salvar NF{% if dados_xml and dados_xml.duplicatas %} e {{ dados_xml.duplicatas|length }} Parcela(s){% endif %}
+      </button>
     </form>
   </div>
 </div>
@@ -110,20 +145,18 @@
   <div class="card-body">
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="tipo" value="boleto">
-
       <div class="form-group">
         <label class="form-label">PDF do Boleto *</label>
         <input class="form-control" type="file" name="arquivo" accept=".pdf" required>
       </div>
-
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Cliente *</label>
-          <select class="form-control" name="cliente_id" id="cliente-bol" required
-                  onchange="carregarNFs(this.value, 'nf-vinc-bol')">
+          <select class="form-control" name="cliente_id" required
+                  onchange="carregarNFs(this.value,'nf-vinc-bol')">
             <option value="">Selecione...</option>
             {% for c in clientes %}
-            <option value="{{ c.id }}" data-cnpj="{{ c.cnpj }}">{{ c.nome }}</option>
+            <option value="{{ c.id }}">{{ c.nome }}</option>
             {% endfor %}
           </select>
         </div>
@@ -134,7 +167,6 @@
           </select>
         </div>
       </div>
-
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Número do título *</label>
@@ -145,18 +177,18 @@
           <input class="form-control" type="number" name="valor" step="0.01" min="0">
         </div>
       </div>
-
-      <div class="form-group">
-        <label class="form-label">Vencimento *</label>
-        <input class="form-control" type="text" name="vencimento"
-               placeholder="DD/MM/AAAA" required>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Vencimento *</label>
+          <input class="form-control" type="text" name="vencimento"
+                 placeholder="DD/MM/AAAA" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Representada</label>
+          <input class="form-control" type="text" name="representada_bol"
+                 placeholder="Ex: HD Ferragens">
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Representada</label>
-        <input class="form-control" type="text" name="representada_bol"
-               placeholder="Ex: HD Ferragens">
-      </div>
-
       <button type="submit" class="btn btn-primary btn-full">💾 Salvar Boleto</button>
     </form>
   </div>
@@ -168,88 +200,6 @@
 
 {% block scripts %}
 <script>
-// ── Extração via XML (principal) ─────────────────────────────────────
-async function extrairXML(input) {
-  if (!input.files[0]) return;
-
-  const loading = document.getElementById('loading-xml');
-  const status  = document.getElementById('status-ia');
-  loading.style.display = 'block';
-  status.textContent = '';
-
-  const fd = new FormData();
-  fd.append('xml', input.files[0]);
-
-  try {
-    const res  = await fetch('/admin/extrair-xml', { method: 'POST', body: fd });
-    const data = await res.json();
-
-    if (data.sucesso) {
-      if (data.numero_nf)     document.getElementById('campo-numero-nf').value     = data.numero_nf;
-      if (data.valor)         document.getElementById('campo-valor-nf').value       = data.valor;
-      if (data.data_emissao)  document.getElementById('campo-data-nf').value        = data.data_emissao;
-      if (data.representada)  document.getElementById('campo-representada').value   = data.representada;
-      if (data.transportadora)document.getElementById('campo-transportadora').value = data.transportadora;
-
-      // Identifica cliente pelo CNPJ automaticamente
-      let clienteEncontrado = false;
-      if (data.cnpj) {
-        const cnpjLimpo = data.cnpj.replace(/\D/g, '');
-        const opts = document.getElementById('cliente-nf').options;
-        for (let i = 0; i < opts.length; i++) {
-          const optCnpj = (opts[i].dataset.cnpj || '').replace(/\D/g, '');
-          if (optCnpj === cnpjLimpo) {
-            document.getElementById('cliente-nf').value = opts[i].value;
-            clienteEncontrado = true;
-            break;
-          }
-        }
-      }
-
-      // Mostra parcelas extraídas
-      const parcDiv = document.getElementById('parcelas-container');
-      if (data.duplicatas && data.duplicatas.length > 0) {
-        let html = `<div style="margin-top:1rem;padding:1rem;background:var(--gray-50);border-radius:8px;border:1px solid var(--gray-200)">
-          <div style="font-size:.8rem;font-weight:600;color:var(--gray-600);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">
-            📋 ${data.duplicatas.length} parcela(s) encontrada(s) — serão cadastradas automaticamente
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.5rem">`;
-        data.duplicatas.forEach(d => {
-          const val = parseFloat(d.valor).toLocaleString('pt-BR', {style:'currency',currency:'BRL'});
-          html += `<div style="background:white;padding:.5rem .75rem;border-radius:6px;border:1px solid var(--gray-200);font-size:.8rem">
-            <div style="font-weight:600;color:var(--gray-800)">Parcela ${d.numero}</div>
-            <div style="color:var(--gray-600)">${val}</div>
-            <div style="color:var(--gray-400)">${d.vencimento}</div>
-          </div>`;
-        });
-        html += '</div></div>';
-        parcDiv.innerHTML = html;
-        // Salva as duplicatas para enviar com o form
-        const dupJson = JSON.stringify(data.duplicatas);
-        document.getElementById('duplicatas-json').value = dupJson;
-        console.log('[upload] duplicatas salvas no hidden:', dupJson.substring(0,100));
-      }
-
-      if (clienteEncontrado) {
-        status.textContent = '✅ XML lido — cliente e parcelas identificados!';
-        status.style.color = 'var(--success)';
-      } else {
-        status.textContent = '✅ XML lido — selecione o cliente manualmente';
-        status.style.color = 'var(--warning)';
-      }
-    } else {
-      status.textContent = '⚠️ Erro no XML — preencha manualmente';
-      status.style.color = 'var(--danger)';
-    }
-  } catch(e) {
-    status.textContent = 'Erro — preencha manualmente';
-    status.style.color = 'var(--danger)';
-  } finally {
-    loading.style.display = 'none';
-  }
-}
-
-// ── Carregar NFs do cliente ──────────────────────────────────────────
 async function carregarNFs(clienteId, selectId) {
   const sel = document.getElementById(selectId);
   if (!sel || !clienteId) return;
