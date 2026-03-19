@@ -388,6 +388,73 @@ def admin_nfs_cliente(cliente_id):
                      "data_emissao": n["data_emissao"]} for n in nfs])
 
 
+
+@app.route("/admin/titulos-upload", methods=["GET", "POST"])
+@login_admin_required
+def admin_titulos_upload():
+    clientes  = db.listar_clientes()
+    dados_xml = None
+    cliente_id = None
+
+    if request.method == "POST":
+        etapa = request.form.get("etapa", "1")
+
+        # ── Etapa 1: lê XML e mostra campos ──
+        if etapa == "1":
+            cliente_id = request.form.get("cliente_id")
+            xml_file   = request.files.get("xml")
+            if xml_file and xml_file.filename:
+                dados_xml = extrair_dados_xml(xml_file.read())
+                if not dados_xml.get("sucesso") or not dados_xml.get("duplicatas"):
+                    flash("XML sem parcelas encontradas. Verifique o arquivo.", "erro")
+                    return redirect(url_for("admin_titulos_upload"))
+            return render_template("admin/titulos_upload.html",
+                clientes=clientes, dados_xml=dados_xml, cliente_id=cliente_id)
+
+        # ── Etapa 2: salva os títulos ──
+        elif etapa == "2":
+            cliente_id   = int(request.form.get("cliente_id", 0))
+            representada = request.form.get("representada", "")
+            numero_nf    = request.form.get("numero_nf", "")
+            total        = int(request.form.get("total_parcelas", 0))
+            salvos       = 0
+
+            # Busca NF vinculada
+            nfs_cliente = db.listar_nfs(cliente_id)
+            nf_vinculada = next((n["id"] for n in nfs_cliente
+                                 if n["numero_nf"] == numero_nf), None)
+
+            for i in range(1, total + 1):
+                numero_titulo = request.form.get(f"numero_titulo_{i}", "")
+                vencimento    = request.form.get(f"vencimento_{i}", "")
+                valor         = float(request.form.get(f"valor_{i}") or 0)
+                boleto_file   = request.files.get(f"boleto_{i}")
+
+                pdf_b64    = ""
+                nome_arq   = ""
+                if boleto_file and boleto_file.filename:
+                    pdf_b64  = base64.b64encode(boleto_file.read()).decode()
+                    nome_arq = boleto_file.filename
+
+                db.inserir_titulo(
+                    cliente_id=cliente_id,
+                    numero_titulo=numero_titulo,
+                    valor=valor,
+                    vencimento=vencimento,
+                    boleto_base64=pdf_b64,
+                    nome_arquivo=nome_arq,
+                    nf_id=nf_vinculada,
+                    representada=representada,
+                )
+                salvos += 1
+
+            flash(f"✅ {salvos} título(s) cadastrado(s) com sucesso!", "sucesso")
+            return redirect(url_for("admin_titulos_upload"))
+
+    return render_template("admin/titulos_upload.html",
+        clientes=clientes, dados_xml=None, cliente_id=None)
+
+
 @app.route("/admin/rastreio")
 @login_admin_required
 def admin_rastreio():
