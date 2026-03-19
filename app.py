@@ -285,25 +285,34 @@ def admin_dashboard():
 @app.route("/admin/upload", methods=["GET", "POST"])
 @login_admin_required
 def admin_upload():
-    clientes  = db.listar_clientes()
-    opcoes    = {str(c["id"]): c for c in clientes}
+    clientes   = db.listar_clientes()
     tipo_ativo = request.args.get("tipo", "nf")
-    msg        = None
+    dados_xml  = None
 
     if request.method == "POST":
-        tipo       = request.form.get("tipo")
-        cliente_id = int(request.form.get("cliente_id"))
-        arquivo    = request.files.get("arquivo")
+        tipo = request.form.get("tipo", "nf")
 
+        # ── Etapa 1: só XML (sem PDF) — lê e volta com campos preenchidos ──
+        arquivo = request.files.get("arquivo")
+        xml_file = request.files.get("xml")
+
+        if tipo == "nf" and (not arquivo or arquivo.filename == ""):
+            if xml_file and xml_file.filename:
+                dados_xml = extrair_dados_xml(xml_file.read())
+            return render_template("admin/upload.html",
+                clientes=clientes, tipo_ativo=tipo_ativo, dados_xml=dados_xml)
+
+        # ── Etapa 2: form completo com PDF ──
         if not arquivo or arquivo.filename == "":
             flash("Selecione um arquivo PDF.", "erro")
-            return redirect(url_for("admin_upload"))
+            return redirect(url_for("admin_upload") + f"?tipo={tipo}")
         if not arquivo.filename.lower().endswith(".pdf"):
-            flash(f"Arquivo inválido ({arquivo.filename}). Selecione um PDF.", "erro")
-            return redirect(url_for("admin_upload"))
+            flash("Arquivo inválido. Selecione um PDF.", "erro")
+            return redirect(url_for("admin_upload") + f"?tipo={tipo}")
 
-        pdf_bytes = arquivo.read()
-        pdf_b64   = base64.b64encode(pdf_bytes).decode()
+        cliente_id = int(request.form.get("cliente_id", 0))
+        pdf_bytes  = arquivo.read()
+        pdf_b64    = base64.b64encode(pdf_bytes).decode()
 
         if tipo == "nf":
             db.inserir_nf(
@@ -313,76 +322,43 @@ def admin_upload():
                 data_emissao=request.form.get("data_emissao",""),
                 pdf_base64=pdf_b64,
                 nome_arquivo=arquivo.filename,
-                codigo_rastreio=request.form.get("codigo_rastreio",""),
+                codigo_rastreio="",
                 transportadora=request.form.get("transportadora",""),
                 status=request.form.get("status","ativo"),
                 observacao=request.form.get("observacao",""),
                 representada=request.form.get("representada",""),
             )
-            nf_id_salvo = db.get_ultimo_nf_id(int(cliente_id))
+            nf_id_salvo = db.get_ultimo_nf_id(cliente_id)
 
-            # Processa XML enviado junto com o formulário para extrair duplicatas
-            xml_file = request.files.get("xml")
-            duplicatas_criadas = 0
-
-            # Tenta pegar duplicatas do campo hidden (preenchido pelo JS)
+            # Cadastra duplicatas vindas do campo hidden (preenchido no template)
             import json as _json
-            duplicatas_raw = request.form.get("duplicatas_json", "").strip()
-            print(f"[upload] duplicatas_json recebido: {duplicatas_raw[:200] if duplicatas_raw else 'VAZIO'}")
+            duplicatas_raw = request.form.get("duplicatas_json","").strip()
+            duplicatas_criadas = 0
 
             if duplicatas_raw:
                 try:
-                    duplicatas = _json.loads(duplicatas_raw)
-                    numero_nf    = request.form.get("numero_nf", "")
-                    representada = request.form.get("representada", "")
+                    duplicatas   = _json.loads(duplicatas_raw)
+                    numero_nf    = request.form.get("numero_nf","")
+                    representada = request.form.get("representada","")
                     for dup in duplicatas:
-                        numero_titulo = f"{numero_nf}-{dup.get('numero','')}"
                         db.inserir_titulo(
-                            cliente_id=int(cliente_id),
-                            numero_titulo=numero_titulo,
-                            valor=float(dup.get("valor", 0)),
-                            vencimento=dup.get("vencimento", ""),
+                            cliente_id=cliente_id,
+                            numero_titulo=f"{numero_nf}-{dup.get('numero','')}",
+                            valor=float(dup.get("valor",0)),
+                            vencimento=dup.get("vencimento",""),
                             boleto_base64="",
                             nome_arquivo="",
                             nf_id=nf_id_salvo,
                             representada=representada,
                         )
                         duplicatas_criadas += 1
-                    print(f"[upload] {duplicatas_criadas} parcelas criadas")
                 except Exception as e:
                     print(f"[upload] Erro parcelas: {e}")
-            else:
-                # Fallback: tenta ler o XML diretamente
-                if xml_file and xml_file.filename:
-                    try:
-                        xml_file.seek(0)
-                        xml_bytes = xml_file.read()
-                        print(f"[upload] Fallback XML: {len(xml_bytes)} bytes")
-                        dados_xml = extrair_dados_xml(xml_bytes)
-                        duplicatas = dados_xml.get("duplicatas", [])
-                        numero_nf    = request.form.get("numero_nf", "")
-                        representada = request.form.get("representada", "")
-                        for dup in duplicatas:
-                            numero_titulo = f"{numero_nf}-{dup.get('numero','')}"
-                            db.inserir_titulo(
-                                cliente_id=int(cliente_id),
-                                numero_titulo=numero_titulo,
-                                valor=float(dup.get("valor", 0)),
-                                vencimento=dup.get("vencimento", ""),
-                                boleto_base64="",
-                                nome_arquivo="",
-                                nf_id=nf_id_salvo,
-                                representada=representada,
-                            )
-                            duplicatas_criadas += 1
-                        print(f"[upload] Fallback: {duplicatas_criadas} parcelas criadas")
-                    except Exception as e:
-                        print(f"[upload] Erro fallback: {e}")
 
             if duplicatas_criadas > 0:
                 flash(f"NF {request.form.get('numero_nf')} salva com {duplicatas_criadas} parcela(s)!", "sucesso")
             else:
-                flash(f"NF {request.form.get('numero_nf')} salva com sucesso!", "sucesso")
+                flash(f"NF {request.form.get('numero_nf')} salva!", "sucesso")
 
         elif tipo == "boleto":
             nf_id = request.form.get("nf_id")
@@ -398,9 +374,10 @@ def admin_upload():
             )
             flash(f"Boleto {request.form.get('numero_titulo')} salvo!", "sucesso")
 
-        return redirect(url_for("admin_upload"))
+        return redirect(url_for("admin_upload") + f"?tipo={tipo}")
 
-    return render_template("admin/upload.html", clientes=clientes, tipo_ativo=tipo_ativo)
+    return render_template("admin/upload.html",
+        clientes=clientes, tipo_ativo=tipo_ativo, dados_xml=dados_xml)
 
 
 @app.route("/admin/nfs-do-cliente/<int:cliente_id>")
