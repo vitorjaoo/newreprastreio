@@ -340,3 +340,28 @@ def toggle_cliente_ativo(cliente_id: int):
     conn.execute("UPDATE clientes SET ativo = CASE WHEN ativo=1 THEN 0 ELSE 1 END WHERE id=?",
                  [cliente_id])
     conn.commit()
+
+
+def deletar_nf(nf_id: int):
+    conn = get_conn()
+    conn.execute("DELETE FROM notas_fiscais WHERE id=?", [nf_id])
+    conn.commit()
+
+
+def solicitar_confirmacao_pagamento(titulo_id: int):
+    conn = get_conn()
+    conn.execute("UPDATE titulos SET status='aguardando_confirmacao' WHERE id=?", [titulo_id])
+    conn.commit()
+
+
+def listar_titulos_pendentes():
+    """Retorna títulos aguardando confirmação de pagamento"""
+    conn = get_conn()
+    cur = conn.execute(
+        """SELECT t.id, c.nome as cliente, t.numero_titulo, t.valor, t.vencimento
+           FROM titulos t
+           JOIN clientes c ON c.id = t.cliente_id
+           WHERE t.status = 'aguardando_confirmacao'
+           ORDER BY t.criado_em DESC"""
+    )
+    return _rows_to_dicts(cur)
