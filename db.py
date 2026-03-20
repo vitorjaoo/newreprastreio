@@ -98,7 +98,6 @@ def criar_tabelas():
         conn.commit()
     except Exception:
         pass
-    # Migrações seguras para tabelas já existentes
     for col in ["observacao TEXT", "representada TEXT"]:
         try:
             conn.execute(f"ALTER TABLE notas_fiscais ADD COLUMN {col}")
@@ -138,6 +137,22 @@ def criar_cliente(nome: str, cnpj: str, email: str, whatsapp: str, senha_hash: s
 def atualizar_senha(cliente_id: int, senha_hash: str):
     conn = get_conn()
     conn.execute("UPDATE clientes SET senha_hash=? WHERE id=?", [senha_hash, cliente_id])
+    conn.commit()
+
+
+def atualizar_cliente(cliente_id: int, nome: str, cnpj: str, email: str, whatsapp: str, senha_hash: str = None):
+    """Atualiza os dados cadastrais do cliente e a senha (se fornecida)"""
+    conn = get_conn()
+    if senha_hash:
+        conn.execute(
+            "UPDATE clientes SET nome=?, cnpj=?, email=?, whatsapp=?, senha_hash=? WHERE id=?",
+            [nome, cnpj, email, whatsapp, senha_hash, cliente_id]
+        )
+    else:
+        conn.execute(
+            "UPDATE clientes SET nome=?, cnpj=?, email=?, whatsapp=? WHERE id=?",
+            [nome, cnpj, email, whatsapp, cliente_id]
+        )
     conn.commit()
 
 
@@ -193,7 +208,6 @@ def atualizar_status_nf(nf_id: int, status: str, observacao: str):
 
 def deletar_nf(nf_id: int):
     conn = get_conn()
-    # Deleta títulos e eventos vinculados primeiro
     conn.execute("DELETE FROM titulos WHERE nf_id=?", [nf_id])
     conn.execute("DELETE FROM rastreio_eventos WHERE nf_id=?", [nf_id])
     conn.execute("DELETE FROM notas_fiscais WHERE id=?", [nf_id])
@@ -276,7 +290,6 @@ def solicitar_confirmacao_pagamento(titulo_id: int):
 
 
 def listar_titulos_pendentes():
-    """Retorna títulos aguardando confirmação de pagamento"""
     conn = get_conn()
     cur = conn.execute(
         """SELECT t.id, c.nome as cliente, t.numero_titulo, t.valor, t.vencimento
