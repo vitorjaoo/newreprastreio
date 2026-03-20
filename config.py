@@ -4,15 +4,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Config:
-    SECRET_KEY          = os.getenv("SECRET_KEY", "limarepresentacoes..")
-    TURSO_DATABASE_URL  = os.getenv("libsql://rasrep-vitorrastrep.aws-us-east-2.turso.io")
-    TURSO_AUTH_TOKEN    = os.getenv("eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzM3NzIxNDIsImlkIjoiMDE5Y2Y2YjgtMWQwMS03YTRhLTlmMTAtZDU3ZDRiYzUwZWM4IiwicmlkIjoiNWUwZmFiOGEtZGMwZS00MmI2LTlmMWMtZDFiNmU4ZjMwMjY3In0.YsrURbRJdjYAKkNnR9dEb_jlAL4sUPC52pbFDh6LnUYEeo87dUTENFy55kNvB5B5TTIic-Oe6P1CDsMxgMJ-BA")
-    EQUIPE_SENHA = os.getenv("EQUIPE_SENHA", "equipe123")
-    ADMIN_SENHA         = os.getenv("ADMIN_SENHA", "admin123")
-    ANTHROPIC_API_KEY   = os.getenv("ANTHROPIC_API_KEY", "")
-    RESEND_API_KEY      = os.getenv("RESEND_API_KEY", "")
+    SECRET_KEY = os.getenv("SECRET_KEY", "limarepresentações..")
+    NOME_ESCRITORIO = "Lima Representações"
+    COR_PRIMARIA = "#0f172a"
+    COR_SECUNDARIA = "#3b82f6"
+    
+    # --- BANCO DE DADOS (TURSO) ---
+    # Estas linhas garantem que o db.py continue a funcionar
+    TURSO_DATABASE_URL = os.getenv("libsql://rasrep-vitorrastrep.aws-us-east-2.turso.io")
+    TURSO_AUTH_TOKEN = os.getenv("eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzQwNDAyOTYsImlkIjoiMDE5Y2Y2YjgtMWQwMS03YTRhLTlmMTAtZDU3ZDRiYzUwZWM4IiwicmlkIjoiNWUwZmFiOGEtZGMwZS00MmI2LTlmMWMtZDFiNmU4ZjMwMjY3In0.hrZEmnZmNXq_jVEPS1qcY_IErm_1iikxdWMlukgs1dRnbrxx127Vn4d-hr5Qj4TioidL-vUc3Uc8t3ZPL9FZAA")
 
-    # Identidade visual — troque aqui quando tiver as cores do escritório
-    COR_PRIMARIA        = os.getenv("COR_PRIMARIA",  "#1D4ED8")   # azul
-    COR_SECUNDARIA      = os.getenv("COR_SECUNDARIA","#1E40AF")   # azul escuro
-    NOME_ESCRITORIO     = os.getenv("Lima Representações", "Portal do Cliente")
+    # --- ACESSOS ADMINISTRATIVOS ---
+    # Senha do Administrador (você)
+    ADMIN_SENHA = os.getenv("ADMIN_SENHA", "123456")
+    
+    # Senha da Equipe (Apenas visualização)
+    EQUIPE_SENHA = os.getenv("EQUIPE_SENHA", "equipe123")
+
+    # --- EMAIL (RESEND) ---
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
