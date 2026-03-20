@@ -8,6 +8,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   {% block head %}{% endblock %}
+
+  {% if session.perfil == 'leitor' %}
+  <style>
+    /* Bloqueia cliques em formulários e esconde botões de submissão/edição */
+    form[method="POST"] { pointer-events: none; opacity: 0.6; }
+    form[method="POST"] button[type="submit"] { display: none !important; }
+    button[onclick*="abrirEditar"], button[onclick*="showTab"], button[onclick*="confirm"] { display: none !important; }
+  </style>
+  {% endif %}
 </head>
 <body>
 <div class="layout">
@@ -33,11 +42,13 @@
           Trocar Senha
         </a>
       {% else %}
-        <div class="nav-section">Operação</div>
+        <div class="nav-section">Operação Geral</div>
+        {% if session.perfil == 'admin' %}
         <a href="{{ url_for('admin_upload') }}"   class="nav-item {% if request.endpoint == 'admin_upload' %}active{% endif %}">
           <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
           Upload
         </a>
+        {% endif %}
         <a href="{{ url_for('admin_rastreio') }}" class="nav-item {% if request.endpoint == 'admin_rastreio' %}active{% endif %}">
           <svg viewBox="0 0 20 20" fill="currentColor"><path d="M8 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM15 16.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z"/><path d="M3 4a1 1 0 00-1 1v10a1 1 0 001 1h1.05a2.5 2.5 0 014.9 0H10a1 1 0 001-1v-1h3.05a2.5 2.5 0 014.9 0H19a1 1 0 001-1v-5a1 1 0 00-.293-.707l-3-3A1 1 0 0016 4H3z"/></svg>
           Rastreio
@@ -61,7 +72,13 @@
     <div class="sidebar-footer">
       <div class="user-info">
         <strong>{{ session.usuario.nome if session.usuario else '' }}</strong>
-        {% if session.perfil == 'cliente' %}{{ session.usuario.cnpj }}{% else %}Administrador{% endif %}
+        {% if session.perfil == 'cliente' %}
+            {{ session.usuario.cnpj }}
+        {% elif session.perfil == 'admin' %}
+            Administração
+        {% else %}
+            Leitura (S/ Edição)
+        {% endif %}
       </div>
       <a href="{{ url_for('sair') }}" class="btn btn-outline btn-sm btn-full">
         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clip-rule="evenodd"/></svg>
