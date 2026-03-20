@@ -29,9 +29,16 @@ import db
 from config import Config
 from extrator_pdf import extrair_dados_nf, extrair_dados_boleto, extrair_dados_xml, pdf_para_base64
 
+# Integração de E-mail (Resend)
+import resend
+
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
+
+# Configuração da API Key do Resend (Puxa das Variáveis de Ambiente)
+resend.api_key = getattr(Config, 'RESEND_API_KEY', '')
+
 
 # Injeta variáveis globais em todos os templates
 @app.context_processor
@@ -68,6 +75,27 @@ def login_admin_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+
+# Função base para envio de e-mails via Resend
+def enviar_email_notificacao(email_destino, assunto, mensagem_html):
+    """Dispara o e-mail se o cliente tiver um e-mail cadastrado e a chave da API existir."""
+    if not email_destino or not resend.api_key:
+        return False
+    
+    try:
+        # ATENÇÃO: Altere o domínio 'seudominio.com.br' para o domínio verificado no seu Resend
+        params = {
+            "from": f"{Config.NOME_ESCRITORIO} <nao-responda@seudominio.com.br>",
+            "to": [email_destino],
+            "subject": assunto,
+            "html": mensagem_html,
+        }
+        resend.Emails.send(params)
+        print(f"[E-mail] Enviado com sucesso para {email_destino}")
+        return True
+    except Exception as e:
+        print(f"[E-mail] Erro ao enviar para {email_destino}: {e}")
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -134,7 +162,6 @@ def dashboard():
         except Exception:
             pass
 
-    # Adiciona eventos de rastreio em cada NF
     for nf in nfs:
         nf["eventos"] = db.listar_eventos_rastreio(nf["id"])
         nf["tem_rastreio"] = len(nf["eventos"]) > 0
@@ -224,8 +251,6 @@ def financeiro():
             t["dias_vencimento"] = dias
             if t["status"] == "aberto" and iso < hoje:
                 t["status_visual"] = "vencido"
-            elif t["status"] == "aguardando_confirmacao":
-                t["status_visual"] = "aguardando_confirmacao"
             else:
                 t["status_visual"] = t["status"]
         except Exception:
@@ -287,130 +312,92 @@ def admin_dashboard():
 @app.route("/admin/upload", methods=["GET", "POST"])
 @login_admin_required
 def admin_upload():
-    clientes   = db.listar_clientes()
+    clientes  = db.listar_clientes()
+    opcoes    = {str(c["id"]): c for c in clientes}
     tipo_ativo = request.args.get("tipo", "nf")
-    dados_xml  = None
 
     if request.method == "POST":
-        tipo = request.form.get("tipo", "nf")
+        tipo       = request.form.get("tipo")
+        cliente_id = int(request.form.get("cliente_id"))
+        arquivo    = request.files.get("arquivo")
 
-        # ── Etapa 1: só XML (sem PDF) — lê e volta com campos preenchidos ──
-        arquivo = request.files.get("arquivo")
-        xml_file = request.files.get("xml")
-
-        if tipo == "nf" and (not arquivo or arquivo.filename == ""):
-            if xml_file and xml_file.filename:
-                dados_xml = extrair_dados_xml(xml_file.read())
-            return render_template("admin/upload.html",
-                clientes=clientes, tipo_ativo=tipo_ativo, dados_xml=dados_xml)
-
-        # ── Etapa 2: form completo com PDF ──
         if not arquivo or arquivo.filename == "":
             flash("Selecione um arquivo PDF.", "erro")
-            return redirect(url_for("admin_upload") + f"?tipo={tipo}")
+            return redirect(url_for("admin_upload"))
         if not arquivo.filename.lower().endswith(".pdf"):
-            flash("Arquivo inválido. Selecione um PDF.", "erro")
-            return redirect(url_for("admin_upload") + f"?tipo={tipo}")
+            flash(f"Arquivo inválido ({arquivo.filename}). Selecione um PDF.", "erro")
+            return redirect(url_for("admin_upload"))
 
-        cliente_id = int(request.form.get("cliente_id", 0))
-        pdf_bytes  = arquivo.read()
-        pdf_b64    = base64.b64encode(pdf_bytes).decode()
+        pdf_bytes = arquivo.read()
+        pdf_b64   = base64.b64encode(pdf_bytes).decode()
+        
+        # Obtém dados do cliente para envio do e-mail
+        cliente_alvo = next((c for c in clientes if c["id"] == cliente_id), None)
+        email_cliente = cliente_alvo["email"] if (cliente_alvo and "email" in cliente_alvo) else ""
+        nome_cliente = cliente_alvo["nome"] if cliente_alvo else "Cliente"
 
         if tipo == "nf":
+            numero_nf = request.form.get("numero_nf","")
             db.inserir_nf(
                 cliente_id=cliente_id,
-                numero_nf=request.form.get("numero_nf",""),
+                numero_nf=numero_nf,
                 valor=float(request.form.get("valor") or 0),
                 data_emissao=request.form.get("data_emissao",""),
                 pdf_base64=pdf_b64,
                 nome_arquivo=arquivo.filename,
-                codigo_rastreio="",
+                codigo_rastreio=request.form.get("codigo_rastreio",""),
                 transportadora=request.form.get("transportadora",""),
                 status=request.form.get("status","ativo"),
                 observacao=request.form.get("observacao",""),
                 representada=request.form.get("representada",""),
             )
-            nf_id_salvo = db.get_ultimo_nf_id(cliente_id)
-
-            # Cadastra duplicatas vindas do campo hidden (preenchido no template)
-            import json as _json
-            duplicatas_raw = request.form.get("duplicatas_json","").strip()
-            duplicatas_criadas = 0
-
-            if duplicatas_raw:
-                try:
-                    duplicatas   = _json.loads(duplicatas_raw)
-                    numero_nf    = request.form.get("numero_nf","")
-                    representada = request.form.get("representada","")
-                    for dup in duplicatas:
-                        db.inserir_titulo(
-                            cliente_id=cliente_id,
-                            numero_titulo=f"{numero_nf}-{dup.get('numero','')}",
-                            valor=float(dup.get("valor",0)),
-                            vencimento=dup.get("vencimento",""),
-                            boleto_base64="",
-                            nome_arquivo="",
-                            nf_id=nf_id_salvo,
-                            representada=representada,
-                        )
-                        duplicatas_criadas += 1
-                except Exception as e:
-                    print(f"[upload] Erro parcelas: {e}")
-
-            if duplicatas_criadas > 0:
-                flash(f"NF {request.form.get('numero_nf')} salva com {duplicatas_criadas} parcela(s)!", "sucesso")
-            else:
-                flash(f"NF {request.form.get('numero_nf')} salva!", "sucesso")
+            flash(f"NF {numero_nf} salva com sucesso!", "sucesso")
+            
+            # GATILHO DE NOTIFICAÇÃO (RESEND): Nova Nota Fiscal
+            if email_cliente:
+                assunto_email = f"Nova Nota Fiscal disponível - {Config.NOME_ESCRITORIO}"
+                html_email = f"""
+                <div style="font-family: Arial, sans-serif; color: #333;">
+                    <h2>Olá, {nome_cliente}!</h2>
+                    <p>Uma nova Nota Fiscal <strong>(Nº {numero_nf})</strong> foi disponibilizada no seu portal de cliente.</p>
+                    <p>Aceda ao portal para fazer o download, verificar os valores e acompanhar o rastreio da entrega.</p>
+                    <br>
+                    <p>Atenciosamente,<br>Equipa {Config.NOME_ESCRITORIO}</p>
+                </div>
+                """
+                enviar_email_notificacao(email_cliente, assunto_email, html_email)
 
         elif tipo == "boleto":
             nf_id = request.form.get("nf_id")
+            numero_titulo = request.form.get("numero_titulo","")
             db.inserir_titulo(
                 cliente_id=cliente_id,
-                numero_titulo=request.form.get("numero_titulo",""),
+                numero_titulo=numero_titulo,
                 valor=float(request.form.get("valor") or 0),
                 vencimento=request.form.get("vencimento",""),
                 boleto_base64=pdf_b64,
                 nome_arquivo=arquivo.filename,
                 nf_id=int(nf_id) if nf_id else None,
-                representada=request.form.get("representada_bol",""),
             )
-            flash(f"Boleto {request.form.get('numero_titulo')} salvo!", "sucesso")
+            flash(f"Boleto {numero_titulo} salvo!", "sucesso")
+            
+            # GATILHO DE NOTIFICAÇÃO (RESEND): Novo Boleto
+            if email_cliente:
+                assunto_email = f"Novo Boleto para Pagamento - {Config.NOME_ESCRITORIO}"
+                html_email = f"""
+                <div style="font-family: Arial, sans-serif; color: #333;">
+                    <h2>Olá, {nome_cliente}!</h2>
+                    <p>Um novo boleto/título <strong>(Nº {numero_titulo})</strong> foi adicionado ao seu painel financeiro.</p>
+                    <p>Aceda ao nosso portal para visualizar os detalhes, conferir o vencimento e descarregar o PDF do boleto para pagamento.</p>
+                    <br>
+                    <p>Atenciosamente,<br>Equipa {Config.NOME_ESCRITORIO}</p>
+                </div>
+                """
+                enviar_email_notificacao(email_cliente, assunto_email, html_email)
 
-        return redirect(url_for("admin_upload") + f"?tipo={tipo}")
+        return redirect(url_for("admin_upload"))
 
-    return render_template("admin/upload.html",
-        clientes=clientes, tipo_ativo=tipo_ativo, dados_xml=dados_xml)
-
-
-
-@app.route("/admin/nfs/deletar/<int:nf_id>", methods=["POST"])
-@login_admin_required
-def admin_deletar_nf(nf_id):
-    db.deletar_nf(nf_id)
-    flash("NF deletada com sucesso.", "sucesso")
-    return redirect(url_for("admin_nfs"))
-
-
-
-@app.route("/admin/titulos/validar/<int:titulo_id>", methods=["POST"])
-@login_admin_required
-def admin_validar_pagamento(titulo_id):
-    db.marcar_titulo_pago(titulo_id)
-    flash("Pagamento confirmado!", "sucesso")
-    return redirect(url_for("admin_titulos"))
-
-
-
-@app.route("/solicitar-pagamento/<int:titulo_id>", methods=["POST"])
-@login_cliente_required
-def solicitar_pagamento(titulo_id):
-    cliente = session["usuario"]
-    titulos = db.listar_titulos(cliente["id"])
-    if not any(t["id"] == titulo_id for t in titulos):
-        return "Não autorizado", 403
-    db.solicitar_confirmacao_pagamento(titulo_id)
-    flash("✅ Pagamento enviado para validação! O escritório irá confirmar em breve.", "sucesso")
-    return redirect(url_for("financeiro"))
+    return render_template("admin/upload.html", clientes=clientes, tipo_ativo=tipo_ativo)
 
 
 @app.route("/admin/nfs-do-cliente/<int:cliente_id>")
@@ -419,77 +406,6 @@ def admin_nfs_cliente(cliente_id):
     nfs = db.listar_nfs(cliente_id)
     return jsonify([{"id": n["id"], "numero_nf": n["numero_nf"],
                      "data_emissao": n["data_emissao"]} for n in nfs])
-
-
-
-@app.route("/admin/titulos-upload", methods=["GET", "POST"])
-@login_admin_required
-def admin_titulos_upload():
-    clientes  = db.listar_clientes()
-    dados_xml = None
-    cliente_id = None
-
-    if request.method == "POST":
-        etapa = request.form.get("etapa", "1")
-
-        # ── Etapa 1: lê XML e mostra campos ──
-        if etapa == "1":
-            cliente_id = request.form.get("cliente_id")
-            xml_file   = request.files.get("xml")
-            print(f"[titulos_upload] cliente_id={cliente_id} xml={xml_file.filename if xml_file else 'NENHUM'}")
-            if xml_file and xml_file.filename:
-                xml_bytes = xml_file.read()
-                print(f"[titulos_upload] XML tamanho: {len(xml_bytes)} bytes")
-                dados_xml = extrair_dados_xml(xml_bytes)
-                print(f"[titulos_upload] duplicatas: {len(dados_xml.get('duplicatas', []))}")
-                if not dados_xml.get("sucesso") or not dados_xml.get("duplicatas"):
-                    flash("XML sem parcelas encontradas. Verifique o arquivo.", "erro")
-                    return redirect(url_for("admin_titulos_upload"))
-            return render_template("admin/titulos_upload.html",
-                clientes=clientes, dados_xml=dados_xml, cliente_id=cliente_id)
-
-        # ── Etapa 2: salva os títulos ──
-        elif etapa == "2":
-            cliente_id   = int(request.form.get("cliente_id", 0))
-            representada = request.form.get("representada", "")
-            numero_nf    = request.form.get("numero_nf", "")
-            total        = int(request.form.get("total_parcelas", 0))
-            salvos       = 0
-
-            # Busca NF vinculada
-            nfs_cliente = db.listar_nfs(cliente_id)
-            nf_vinculada = next((n["id"] for n in nfs_cliente
-                                 if n["numero_nf"] == numero_nf), None)
-
-            for i in range(1, total + 1):
-                numero_titulo = request.form.get(f"numero_titulo_{i}", "")
-                vencimento    = request.form.get(f"vencimento_{i}", "")
-                valor         = float(request.form.get(f"valor_{i}") or 0)
-                boleto_file   = request.files.get(f"boleto_{i}")
-
-                pdf_b64    = ""
-                nome_arq   = ""
-                if boleto_file and boleto_file.filename:
-                    pdf_b64  = base64.b64encode(boleto_file.read()).decode()
-                    nome_arq = boleto_file.filename
-
-                db.inserir_titulo(
-                    cliente_id=cliente_id,
-                    numero_titulo=numero_titulo,
-                    valor=valor,
-                    vencimento=vencimento,
-                    boleto_base64=pdf_b64,
-                    nome_arquivo=nome_arq,
-                    nf_id=nf_vinculada,
-                    representada=representada,
-                )
-                salvos += 1
-
-            flash(f"✅ {salvos} título(s) cadastrado(s) com sucesso!", "sucesso")
-            return redirect(url_for("admin_titulos_upload"))
-
-    return render_template("admin/titulos_upload.html",
-        clientes=clientes, dados_xml=None, cliente_id=None)
 
 
 @app.route("/admin/rastreio")
@@ -520,25 +436,6 @@ def admin_rastreio_adicionar():
 def admin_rastreio_remover(evento_id):
     db.deletar_evento_rastreio(evento_id)
     return redirect(request.referrer or url_for("admin_rastreio"))
-
-
-
-@app.route("/admin/clientes/editar/<int:cliente_id>", methods=["POST"])
-@login_admin_required
-def admin_editar_cliente(cliente_id):
-    db.atualizar_cliente(
-        cliente_id,
-        request.form.get("nome",""),
-        request.form.get("cnpj",""),
-        request.form.get("email",""),
-        request.form.get("whatsapp",""),
-    )
-    # Atualiza senha se preenchida
-    nova_senha = request.form.get("nova_senha","").strip()
-    if nova_senha:
-        db.atualizar_senha(cliente_id, hash_senha(nova_senha))
-    flash("Cliente atualizado com sucesso!", "sucesso")
-    return redirect(url_for("admin_clientes"))
 
 
 @app.route("/admin/clientes", methods=["GET", "POST"])
@@ -596,7 +493,8 @@ def admin_nfs():
         db.atualizar_status_nf(nf_id,
             request.form.get("status",""),
             request.form.get("observacao",""))
-        db.atualizar_representada(nf_id, request.form.get("representada",""))
+        # Caso exista a função atualizar_representada no db.py, descomente abaixo
+        # db.atualizar_representada(nf_id, request.form.get("representada",""))
         flash("NF atualizada!", "sucesso")
         return redirect(url_for("admin_nfs"))
 
@@ -613,7 +511,7 @@ def admin_titulos():
         return redirect(url_for("admin_titulos"))
 
     titulos = db.listar_todos_titulos()
-    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] in ["aberto","aguardando_confirmacao"])
+    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
     recebido  = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
     return render_template("admin/titulos.html",
         titulos=titulos, em_aberto=em_aberto, recebido=recebido)
@@ -647,18 +545,34 @@ def importar_clientes_excel(arquivo_bytes: bytes) -> dict:
         return {"sucesso": False, "erro": str(e)}
 
 
-
-
+# ──────────────────────────────────────────────────────────────────────────────
+# ROTA DE EXTRAÇÃO COM LOGS DE DEBUG
+# ──────────────────────────────────────────────────────────────────────────────
 @app.route("/admin/extrair-xml", methods=["POST"])
 @login_admin_required
 def extrair_xml():
-    """Recebe XML da NF-e e extrai dados sem chamar nenhuma API"""
-    arquivo = request.files.get("xml")
-    if not arquivo or arquivo.filename == "":
-        return jsonify({"sucesso": False, "erro": "Nenhum arquivo"})
-    xml_bytes = arquivo.read()
-    dados = extrair_dados_xml(xml_bytes)
-    return jsonify(dados)
+    """Recebe XML da NF-e e extrai dados com Logs detalhados para Debug"""
+    try:
+        print(">>> [1] INICIANDO ROTA DE EXTRAÇÃO DE XML <<<")
+        arquivo = request.files.get("xml")
+        
+        if not arquivo or arquivo.filename == "":
+            print(">>> [ERRO] Nenhum ficheiro recebido do frontend.")
+            return jsonify({"sucesso": False, "erro": "Nenhum arquivo"})
+            
+        print(f">>> [2] Ficheiro recebido: {arquivo.filename}")
+        xml_bytes = arquivo.read()
+        print(f">>> [3] Tamanho do ficheiro: {len(xml_bytes)} bytes")
+        
+        # Chama o extrator
+        dados = extrair_dados_xml(xml_bytes)
+        print(f">>> [4] Dados retornados pelo extrator: {dados.get('sucesso')}")
+        
+        return jsonify(dados)
+        
+    except Exception as e:
+        print(f">>> [ERRO CRÍTICO NO APP.PY] Falha na rota de extração: {e}")
+        return jsonify({"sucesso": False, "erro": f"Erro interno: {str(e)}"})
 
 
 @app.route("/admin/extrair-pdf", methods=["POST"])
