@@ -85,14 +85,20 @@
             {% endif %}
           </td>
           <td>
-            <form method="POST" style="display:inline">
-              <input type="hidden" name="acao" value="inativar">
-              <input type="hidden" name="cliente_id" value="{{ c.id }}">
-              <button type="submit" class="btn btn-outline btn-sm"
-                      onclick="return confirm('{{ 'Inativar' if c.ativo else 'Ativar' }} este cliente?')">
-                {{ '❌ Inativar' if c.ativo else '✅ Ativar' }}
+            <div style="display:flex;gap:.4rem">
+              <button class="btn btn-outline btn-sm"
+                      onclick="abrirEditar({{ c.id }}, '{{ c.nome }}', '{{ c.cnpj }}', '{{ c.email or '' }}', '{{ c.whatsapp or '' }}')">
+                ✏️ Editar
               </button>
-            </form>
+              <form method="POST" style="display:inline">
+                <input type="hidden" name="acao" value="inativar">
+                <input type="hidden" name="cliente_id" value="{{ c.id }}">
+                <button type="submit" class="btn btn-outline btn-sm"
+                        onclick="return confirm('{{ 'Inativar' if c.ativo else 'Ativar' }} este cliente?')">
+                  {{ '❌' if c.ativo else '✅' }}
+                </button>
+              </form>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -103,6 +109,44 @@
 
 {% endblock %}
 
+{# Modal de edição #}
+<div id="modal-editar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:white;border-radius:16px;padding:1.75rem;width:100%;max-width:480px;box-shadow:0 20px 40px rgba(0,0,0,.15)">
+    <h3 style="margin-bottom:1.25rem;font-size:1rem;font-weight:600">✏️ Editar Cliente</h3>
+    <form method="POST" id="form-editar-cliente">
+      <input type="hidden" name="acao" value="editar_via_modal">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nome *</label>
+          <input class="form-control" type="text" name="nome" id="edit-nome" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">CNPJ *</label>
+          <input class="form-control" type="text" name="cnpj" id="edit-cnpj" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">E-mail</label>
+          <input class="form-control" type="email" name="email" id="edit-email">
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp</label>
+          <input class="form-control" type="text" name="whatsapp" id="edit-whatsapp">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nova senha <span style="font-weight:400;color:var(--gray-400)">(deixe em branco para não alterar)</span></label>
+        <input class="form-control" type="password" name="nova_senha" placeholder="••••••••">
+      </div>
+      <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.25rem">
+        <button type="button" class="btn btn-outline" onclick="fecharEditar()">Cancelar</button>
+        <button type="submit" class="btn btn-primary">💾 Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% block scripts %}
 <script>
 function showTab(tab) {
@@ -111,5 +155,23 @@ function showTab(tab) {
   document.getElementById('btn-cad').className = tab === 'cad' ? 'btn btn-primary' : 'btn btn-outline';
   document.getElementById('btn-imp').className = tab === 'imp' ? 'btn btn-primary' : 'btn btn-outline';
 }
+
+function abrirEditar(id, nome, cnpj, email, whatsapp) {
+  document.getElementById('edit-nome').value = nome;
+  document.getElementById('edit-cnpj').value = cnpj;
+  document.getElementById('edit-email').value = email;
+  document.getElementById('edit-whatsapp').value = whatsapp;
+  document.getElementById('form-editar-cliente').action = `/admin/clientes/editar/${id}`;
+  const modal = document.getElementById('modal-editar');
+  modal.style.display = 'flex';
+}
+
+function fecharEditar() {
+  document.getElementById('modal-editar').style.display = 'none';
+}
+
+document.getElementById('modal-editar').addEventListener('click', function(e) {
+  if (e.target === this) fecharEditar();
+});
 </script>
 {% endblock %}
