@@ -8,41 +8,6 @@
 <div style="display:flex;gap:1rem;margin-bottom:1.5rem">
   <a href="{{ url_for('admin_upload') }}?tipo=nf"
      class="btn {{ 'btn-primary' if tipo_ativo == 'nf' else 'btn-outline' }}">
-    📄 Nota Fiscal
-  </a>
-  <a href="{{ url_for('admin_upload') }}?tipo=boleto"
-     class="btn {{ 'btn-primary' if tipo_ativo == 'boleto' else 'btn-outline' }}">
-    🧾 Boleto / Título Avulso
-  </a>
-</div>
-
-{% if tipo_ativo == 'nf' %}
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">Cadastrar Nota Fiscal e Boletos</span>
-    <span id="status-xml" style="font-size:.78rem"></span>
-  </div>
-  <div class="card-body">
-    <form method="POST" enctype="multipart/form-data" id="form-nf">
-      <input type="hidden" name="tipo" value="nf">
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label">PDF da NF * <span style="color:var(--gray-400)">(apenas PDF)</span></label>
-          <input type="file" name="arquivo" class="form-control" accept="application/pdf" required>
-        </div>
-        <div class="form-group" style="margin-bottom:0">
-          <label class="form-label">XML da NF <span style="color:var(--gray-400)">(Opcional)</span></label>
-          <input type="file" id="xml" class={% extends "base.html" %}
-{% block title %}Upload{% endblock %}
-{% block page_title %}Upload de Documentos{% endblock %}
-
-{% block content %}
-<div style="max-width:700px">
-
-<div style="display:flex;gap:1rem;margin-bottom:1.5rem">
-  <a href="{{ url_for('admin_upload') }}?tipo=nf"
-     class="btn {{ 'btn-primary' if tipo_ativo == 'nf' else 'btn-outline' }}">
     📄 Nota Fiscal (Sincronizada com XML)
   </a>
   <a href="{{ url_for('admin_upload') }}?tipo=boleto"
