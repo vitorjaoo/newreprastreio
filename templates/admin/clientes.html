@@ -36,69 +36,72 @@
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Senha de acesso *</label>
-        <input class="form-control" type="password" name="senha" required minlength="4">
+        <label class="form-label">Senha inicial *</label>
+        <input class="form-control" type="password" name="senha" required>
       </div>
-      <button type="submit" class="btn btn-primary">Cadastrar</button>
+      <button class="btn btn-primary" type="submit">💾 Cadastrar</button>
     </form>
   </div>
 </div>
 
 {# Importar #}
 <div id="tab-imp" class="card" style="max-width:600px;margin-bottom:1.5rem;display:none">
-  <div class="card-header"><span class="card-title">Importar via Excel</span></div>
+  <div class="card-header"><span class="card-title">Importar Planilha</span></div>
   <div class="card-body">
-    <p class="text-muted" style="margin-bottom:1rem">Use o modelo Excel para importar vários clientes de uma vez.</p>
     <form method="POST" enctype="multipart/form-data">
       <input type="hidden" name="acao" value="importar">
       <div class="form-group">
         <label class="form-label">Planilha (.xlsx)</label>
         <input class="form-control" type="file" name="planilha" accept=".xlsx" required>
+        <small class="text-muted" style="display:block;margin-top:.5rem">
+          Colunas (linha 6 em diante): Nome | CNPJ | E-mail | WhatsApp | Senha
+        </small>
       </div>
-      <button type="submit" class="btn btn-primary">📥 Importar</button>
+      <button class="btn btn-primary" type="submit">📥 Importar</button>
     </form>
   </div>
 </div>
 
-{# Lista #}
 <div class="card">
-  <div class="card-header">
-    <span class="card-title">Clientes cadastrados ({{ clientes|length }})</span>
-  </div>
-  <div class="table-wrap">
-    <table>
+  <div class="card-header"><span class="card-title">Clientes cadastrados</span></div>
+  <div style="overflow-x:auto">
+    <table class="table">
       <thead>
-        <tr><th>Nome</th><th>CNPJ</th><th>E-mail</th><th>WhatsApp</th><th>Status</th><th></th></tr>
+        <tr>
+          <th>Nome</th>
+          <th>CNPJ</th>
+          <th>Contato</th>
+          <th>Status</th>
+          <th style="text-align:right">Ações</th>
+        </tr>
       </thead>
       <tbody>
         {% for c in clientes %}
         <tr>
-          <td style="font-weight:500">{{ c.nome }}</td>
-          <td class="text-mono">{{ c.cnpj }}</td>
-          <td>{{ c.email or '—' }}</td>
-          <td>{{ c.whatsapp or '—' }}</td>
-          <td>
-            {% if c.ativo %}
-              <span class="badge badge-green">Ativo</span>
-            {% else %}
-              <span class="badge badge-red">Inativo</span>
-            {% endif %}
+          <td><strong>{{ c.nome }}</strong></td>
+          <td>{{ c.cnpj }}</td>
+          <td style="font-size:.85rem;color:var(--gray-600)">
+            {% if c.email %}📧 {{ c.email }}<br>{% endif %}
+            {% if c.whatsapp %}📱 {{ c.whatsapp }}{% endif %}
           </td>
           <td>
-            <div style="display:flex;gap:.4rem">
-              <button class="btn btn-outline btn-sm"
-                      onclick="abrirEditar({{ c.id }}, '{{ c.nome }}', '{{ c.cnpj }}', '{{ c.email or '' }}', '{{ c.whatsapp or '' }}')">
-                ✏️ Editar
+            {% if c.ativo %}
+              <span class="badge" style="background:var(--success);color:#fff">Ativo</span>
+            {% else %}
+              <span class="badge" style="background:var(--danger);color:#fff">Inativo</span>
+            {% endif %}
+          </td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-outline btn-sm" onclick="abrirEditar({{ c.id }}, '{{ c.nome }}', '{{ c.cnpj }}', '{{ c.email }}', '{{ c.whatsapp }}')">
+              ✏️ Editar
+            </button>
+            <form method="POST" style="display:inline-block;margin-left:.5rem">
+              <input type="hidden" name="acao" value="inativar">
+              <input type="hidden" name="cliente_id" value="{{ c.id }}">
+              <button class="btn btn-outline btn-sm" type="submit" onclick="return confirm('Mudar status do cliente?')">
+                {% if c.ativo %}🚫 Desativar{% else %}✅ Ativar{% endif %}
               </button>
-              <form method="POST" style="display:inline">
-                <input type="hidden" name="acao" value="inativar">
-                <input type="hidden" name="cliente_id" value="{{ c.id }}">
-                <button type="submit" class="btn btn-outline btn-sm"
-                        onclick="return confirm('{{ 'Inativar' if c.ativo else 'Ativar' }} este cliente?')">
-                  {{ '❌' if c.ativo else '✅' }}
-                </button>
-              </form>
-            </div>
+            </form>
           </td>
         </tr>
         {% endfor %}
@@ -107,45 +110,42 @@
   </div>
 </div>
 
-{% endblock %}
-
-{# Modal de edição #}
-<div id="modal-editar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:1rem">
-  <div style="background:white;border-radius:16px;padding:1.75rem;width:100%;max-width:480px;box-shadow:0 20px 40px rgba(0,0,0,.15)">
-    <h3 style="margin-bottom:1.25rem;font-size:1rem;font-weight:600">✏️ Editar Cliente</h3>
-    <form method="POST" id="form-editar-cliente">
-      <input type="hidden" name="acao" value="editar_via_modal">
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Nome *</label>
-          <input class="form-control" type="text" name="nome" id="edit-nome" required>
-        </div>
-        <div class="form-group">
-          <label class="form-label">CNPJ *</label>
-          <input class="form-control" type="text" name="cnpj" id="edit-cnpj" required>
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">E-mail</label>
-          <input class="form-control" type="email" name="email" id="edit-email">
-        </div>
-        <div class="form-group">
-          <label class="form-label">WhatsApp</label>
-          <input class="form-control" type="text" name="whatsapp" id="edit-whatsapp">
-        </div>
+<div id="modal-editar" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;padding:1rem;">
+  <div class="card" style="width:100%;max-width:500px;margin:0">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+      <span class="card-title">✏️ Editar Cliente</span>
+      <button type="button" class="btn btn-outline btn-sm" onclick="fecharEditar()" style="border:none;font-size:1.2rem;padding:0 .5rem">×</button>
+    </div>
+    <form method="POST" id="form-editar-cliente" class="card-body">
+      <div class="form-group">
+        <label class="form-label">Nome da empresa *</label>
+        <input class="form-control" type="text" id="edit-nome" name="nome" required>
       </div>
       <div class="form-group">
-        <label class="form-label">Nova senha <span style="font-weight:400;color:var(--gray-400)">(deixe em branco para não alterar)</span></label>
+        <label class="form-label">CNPJ *</label>
+        <input class="form-control" type="text" id="edit-cnpj" name="cnpj" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail</label>
+        <input class="form-control" type="email" id="edit-email" name="email">
+      </div>
+      <div class="form-group">
+        <label class="form-label">WhatsApp</label>
+        <input class="form-control" type="text" id="edit-whatsapp" name="whatsapp">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nova Senha <span style="font-size:0.8rem;color:var(--gray-400)">(Deixe em branco para não alterar)</span></label>
         <input class="form-control" type="password" name="nova_senha" placeholder="••••••••">
       </div>
       <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.25rem">
         <button type="button" class="btn btn-outline" onclick="fecharEditar()">Cancelar</button>
-        <button type="submit" class="btn btn-primary">💾 Salvar</button>
+        <button type="submit" class="btn btn-primary">💾 Salvar Alterações</button>
       </div>
     </form>
   </div>
 </div>
+
+{% endblock %}
 
 {% block scripts %}
 <script>
@@ -169,9 +169,5 @@ function abrirEditar(id, nome, cnpj, email, whatsapp) {
 function fecharEditar() {
   document.getElementById('modal-editar').style.display = 'none';
 }
-
-document.getElementById('modal-editar').addEventListener('click', function(e) {
-  if (e.target === this) fecharEditar();
-});
 </script>
 {% endblock %}
