@@ -211,18 +211,22 @@ def extrair_dados_xml(xml_bytes: bytes) -> dict:
     """
     try:
         import xml.etree.ElementTree as ET
+        import re
 
         # Remove BOM se existir
         xml_str = xml_bytes.decode("utf-8-sig").strip()
+        
+        # 1. Remove a declaração XML para evitar o ValueError
+        xml_str = re.sub(r'<\?xml.*?\?>', '', xml_str)
+
+        # 2. Remove o namespace (xmlns="...") para simplificar a busca
+        xml_str = re.sub(r'\sxmlns="[^"]+"', '', xml_str)
+
         root = ET.fromstring(xml_str)
 
-        # Namespace padrão NF-e
-        ns = {"nfe": "http://www.portalfiscal.inf.br/nfe"}
-
         def find(tag):
-            el = root.find(f".//{{{ns['nfe']}}}{tag}")
-            if el is None:
-                el = root.find(f".//{tag}")
+            # Busca direta, sem precisar de ns['nfe']
+            el = root.find(f".//{tag}")
             return el.text.strip() if el is not None and el.text else ""
 
         # Número e série
@@ -264,12 +268,12 @@ def extrair_dados_xml(xml_bytes: bytes) -> dict:
         # Transportadora
         transportadora = find("transporta/xNome")
 
-        # Extrai duplicatas (parcelas/títulos)
+        # Extrai duplicatas (parcelas/títulos) - Agora funciona liso e limpo!
         duplicatas = []
-        for dup in root.findall(f".//{{{ns['nfe']}}}dup"):
-            n_dup  = dup.find(f"{{{ns['nfe']}}}nDup")
-            d_venc = dup.find(f"{{{ns['nfe']}}}dVenc")
-            v_dup  = dup.find(f"{{{ns['nfe']}}}vDup")
+        for dup in root.findall(f".//dup"):
+            n_dup  = dup.find(f"nDup")
+            d_venc = dup.find(f"dVenc")
+            v_dup  = dup.find(f"vDup")
             if d_venc is not None and v_dup is not None:
                 # Converte data AAAA-MM-DD para DD/MM/AAAA
                 try:
