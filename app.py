@@ -29,16 +29,9 @@ import db
 from config import Config
 from extrator_pdf import extrair_dados_nf, extrair_dados_boleto, extrair_dados_xml, pdf_para_base64
 
-# Integração de E-mail (Resend)
-import resend
-
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
-
-# Configuração da API Key do Resend (Puxa das Variáveis de Ambiente)
-resend.api_key = getattr(Config, 'RESEND_API_KEY', '')
-
 
 # Injeta variáveis globais em todos os templates
 @app.context_processor
@@ -75,27 +68,6 @@ def login_admin_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
-
-# Função base para envio de e-mails via Resend
-def enviar_email_notificacao(email_destino, assunto, mensagem_html):
-    """Dispara o e-mail se o cliente tiver um e-mail cadastrado e a chave da API existir."""
-    if not email_destino or not resend.api_key:
-        return False
-    
-    try:
-        # ATENÇÃO: Altere o domínio 'seudominio.com.br' para o domínio verificado no seu Resend
-        params = {
-            "from": f"{Config.NOME_ESCRITORIO} <nao-responda@seudominio.com.br>",
-            "to": [email_destino],
-            "subject": assunto,
-            "html": mensagem_html,
-        }
-        resend.Emails.send(params)
-        print(f"[E-mail] Enviado com sucesso para {email_destino}")
-        return True
-    except Exception as e:
-        print(f"[E-mail] Erro ao enviar para {email_destino}: {e}")
-        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -313,7 +285,6 @@ def admin_dashboard():
 @login_admin_required
 def admin_upload():
     clientes  = db.listar_clientes()
-    opcoes    = {str(c["id"]): c for c in clientes}
     tipo_ativo = request.args.get("tipo", "nf")
 
     if request.method == "POST":
@@ -330,11 +301,6 @@ def admin_upload():
 
         pdf_bytes = arquivo.read()
         pdf_b64   = base64.b64encode(pdf_bytes).decode()
-        
-        # Obtém dados do cliente para envio do e-mail
-        cliente_alvo = next((c for c in clientes if c["id"] == cliente_id), None)
-        email_cliente = cliente_alvo["email"] if (cliente_alvo and "email" in cliente_alvo) else ""
-        nome_cliente = cliente_alvo["nome"] if cliente_alvo else "Cliente"
 
         if tipo == "nf":
             numero_nf = request.form.get("numero_nf","")
@@ -352,20 +318,6 @@ def admin_upload():
                 representada=request.form.get("representada",""),
             )
             flash(f"NF {numero_nf} salva com sucesso!", "sucesso")
-            
-            # GATILHO DE NOTIFICAÇÃO (RESEND): Nova Nota Fiscal
-            if email_cliente:
-                assunto_email = f"Nova Nota Fiscal disponível - {Config.NOME_ESCRITORIO}"
-                html_email = f"""
-                <div style="font-family: Arial, sans-serif; color: #333;">
-                    <h2>Olá, {nome_cliente}!</h2>
-                    <p>Uma nova Nota Fiscal <strong>(Nº {numero_nf})</strong> foi disponibilizada no seu portal de cliente.</p>
-                    <p>Aceda ao portal para fazer o download, verificar os valores e acompanhar o rastreio da entrega.</p>
-                    <br>
-                    <p>Atenciosamente,<br>Equipa {Config.NOME_ESCRITORIO}</p>
-                </div>
-                """
-                enviar_email_notificacao(email_cliente, assunto_email, html_email)
 
         elif tipo == "boleto":
             nf_id = request.form.get("nf_id")
@@ -380,20 +332,6 @@ def admin_upload():
                 nf_id=int(nf_id) if nf_id else None,
             )
             flash(f"Boleto {numero_titulo} salvo!", "sucesso")
-            
-            # GATILHO DE NOTIFICAÇÃO (RESEND): Novo Boleto
-            if email_cliente:
-                assunto_email = f"Novo Boleto para Pagamento - {Config.NOME_ESCRITORIO}"
-                html_email = f"""
-                <div style="font-family: Arial, sans-serif; color: #333;">
-                    <h2>Olá, {nome_cliente}!</h2>
-                    <p>Um novo boleto/título <strong>(Nº {numero_titulo})</strong> foi adicionado ao seu painel financeiro.</p>
-                    <p>Aceda ao nosso portal para visualizar os detalhes, conferir o vencimento e descarregar o PDF do boleto para pagamento.</p>
-                    <br>
-                    <p>Atenciosamente,<br>Equipa {Config.NOME_ESCRITORIO}</p>
-                </div>
-                """
-                enviar_email_notificacao(email_cliente, assunto_email, html_email)
 
         return redirect(url_for("admin_upload"))
 
@@ -493,8 +431,6 @@ def admin_nfs():
         db.atualizar_status_nf(nf_id,
             request.form.get("status",""),
             request.form.get("observacao",""))
-        # Caso exista a função atualizar_representada no db.py, descomente abaixo
-        # db.atualizar_representada(nf_id, request.form.get("representada",""))
         flash("NF atualizada!", "sucesso")
         return redirect(url_for("admin_nfs"))
 
@@ -546,7 +482,7 @@ def importar_clientes_excel(arquivo_bytes: bytes) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# ROTA DE EXTRAÇÃO COM LOGS DE DEBUG
+# ROTA DE EXTRAÇÃO COM LOGS DE DEBUG (MANTIDA PARA TESTAR O XML)
 # ──────────────────────────────────────────────────────────────────────────────
 @app.route("/admin/extrair-xml", methods=["POST"])
 @login_admin_required
