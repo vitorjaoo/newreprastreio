@@ -33,12 +33,47 @@
         </div>
         <div class="form-group" style="margin-bottom:0">
           <label class="form-label">XML da NF <span style="color:var(--gray-400)">(Opcional)</span></label>
+          <input type="file" id="xml" class={% extends "base.html" %}
+{% block title %}Upload{% endblock %}
+{% block page_title %}Upload de Documentos{% endblock %}
+
+{% block content %}
+<div style="max-width:700px">
+
+<div style="display:flex;gap:1rem;margin-bottom:1.5rem">
+  <a href="{{ url_for('admin_upload') }}?tipo=nf"
+     class="btn {{ 'btn-primary' if tipo_ativo == 'nf' else 'btn-outline' }}">
+    📄 Nota Fiscal (Sincronizada com XML)
+  </a>
+  <a href="{{ url_for('admin_upload') }}?tipo=boleto"
+     class="btn {{ 'btn-primary' if tipo_ativo == 'boleto' else 'btn-outline' }}">
+    🧾 Boleto Avulso (Manual)
+  </a>
+</div>
+
+{% if tipo_ativo == 'nf' %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Cadastrar Nota Fiscal e Boletos</span>
+    <span id="status-xml" style="font-size:.78rem"></span>
+  </div>
+  <div class="card-body">
+    <form method="POST" enctype="multipart/form-data" id="form-nf">
+      <input type="hidden" name="tipo" value="nf">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">PDF da NF * <span style="color:var(--gray-400)">(apenas PDF)</span></label>
+          <input type="file" name="arquivo" class="form-control" accept="application/pdf" required>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">XML da NF * <span style="color:var(--gray-400)">(Auto-preenchimento)</span></label>
           <input type="file" id="xml" class="form-control" accept=".xml">
         </div>
       </div>
 
-      <button type="button" class="btn btn-outline" onclick="extrairXML()" id="btn-extrair-xml" style="width:100%;margin-bottom:1.5rem">
-        ⚡ Extrair Dados e Parcelas do XML
+      <button type="button" class="btn btn-outline" onclick="extrairXML()" id="btn-extrair-xml" style="width:100%;margin-bottom:1.5rem; background-color: var(--primary); color: white; border-color: var(--primary);">
+        ⚡ Ler XML e Puxar Boletos
         <span id="loading-xml" style="display:none;margin-left:.5rem">⏳ Processando...</span>
       </button>
 
@@ -102,7 +137,7 @@
       </div>
 
       <button type="submit" class="btn btn-primary" style="width:100%; margin-top:1rem; padding:0.8rem; font-size:1.1rem">
-        💾 Salvar NF e Boletos
+        💾 Salvar NF e Boletos Atrelados
       </button>
     </form>
   </div>
@@ -118,9 +153,7 @@
         <label class="form-label">PDF do Boleto *</label>
         <input type="file" name="arquivo" id="pdf-boleto" class="form-control" accept="application/pdf" required>
       </div>
-      <button type="button" class="btn btn-outline" onclick="extrairBoleto()" style="width:100%;margin-bottom:1.5rem">
-        🤖 Auto-preencher com IA (Gemini) <span id="loading-bol" style="display:none">⏳...</span>
-      </button>
+      
       <div class="form-group">
         <label class="form-label">Cliente / Pagador *</label>
         <select name="cliente_id" id="cliente-bol" class="form-control" onchange="carregarNFs(this.value, 'nf-bol')" required>
@@ -160,50 +193,6 @@
 
 {% block scripts %}
 <script>
-async function extrairBoleto() {
-  const fileInput = document.getElementById('pdf-boleto');
-  if (!fileInput.files.length) {
-    alert('Selecione o PDF do boleto primeiro.');
-    return;
-  }
-  const loading = document.getElementById('loading-bol');
-  loading.style.display = 'inline-block';
-  
-  try {
-    const fd = new FormData();
-    fd.append('arquivo', fileInput.files[0]);
-    fd.append('tipo', 'boleto');
-
-    const res = await fetch('/admin/extrair-pdf', { method: 'POST', body: fd });
-    const dados = await res.json();
-
-    if (dados.sucesso) {
-      document.getElementById('numero_titulo').value = dados.numero_titulo || '';
-      document.getElementById('venc_bol').value = dados.vencimento || '';
-      document.getElementById('valor_bol').value = dados.valor || '';
-
-      if (dados.cnpj) {
-        const cnpjLimpo = dados.cnpj.replace(/\D/g, '');
-        const opts = document.getElementById('cliente-bol').options;
-        for (let i = 0; i < opts.length; i++) {
-          const optCnpj = (opts[i].dataset.cnpj || '').replace(/\D/g, '');
-          if (optCnpj === cnpjLimpo) {
-            document.getElementById('cliente-bol').value = opts[i].value;
-            carregarNFs(opts[i].value, 'nf-bol');
-            break;
-          }
-        }
-      }
-    } else {
-      alert('Não foi possível extrair os dados. Preencha manualmente.');
-    }
-  } catch(e) {
-    alert('Erro de comunicação.');
-  } finally {
-    loading.style.display = 'none';
-  }
-}
-
 // ── Extração XML Nativa + Geração das Abas dos Boletos ──────────────────────
 async function extrairXML() {
   const loading = document.getElementById('loading-xml');
@@ -257,7 +246,7 @@ async function extrairXML() {
         status.style.color = 'var(--warning)';
       }
 
-      // NOVO: GERAR OS CAMPOS PARA OS BOLETOS!
+      // GERAR OS CAMPOS PARA OS BOLETOS
       if (dados.duplicatas && dados.duplicatas.length > 0) {
         const boletosContainer = document.getElementById('boletos-container');
         let html = '<div class="alert alert-info" style="margin-bottom:1rem;">📋 <b>XML Lido:</b> Encontramos ' + dados.duplicatas.length + ' parcela(s). Anexe os PDFs dos boletos correspondentes abaixo:</div>';
