@@ -304,7 +304,9 @@ def admin_upload():
 
         if tipo == "nf":
             numero_nf = request.form.get("numero_nf","")
-            db.inserir_nf(
+            
+            # 1. Grava a NF e captura o ID gerado
+            nf_id = db.inserir_nf(
                 cliente_id=cliente_id,
                 numero_nf=numero_nf,
                 valor=float(request.form.get("valor") or 0),
@@ -317,7 +319,38 @@ def admin_upload():
                 observacao=request.form.get("observacao",""),
                 representada=request.form.get("representada",""),
             )
-            flash(f"NF {numero_nf} salva com sucesso!", "sucesso")
+            
+            # 2. Grava automaticamente os Boletos/Duplicatas que foram anexados no ecrã
+            boletos_salvos = 0
+            i = 0
+            while True:
+                num_dup = request.form.get(f"dup_num_{i}")
+                if not num_dup:
+                    break # Se não houver mais duplicatas, sai do loop
+                
+                venc_dup = request.form.get(f"dup_venc_{i}")
+                val_dup = request.form.get(f"dup_val_{i}")
+                pdf_dup = request.files.get(f"pdf_boleto_{i}")
+
+                # Se o PDF do boleto foi anexado, grava na base de dados ligado à NF
+                if pdf_dup and pdf_dup.filename:
+                    pdf_dup_b64 = base64.b64encode(pdf_dup.read()).decode()
+                    db.inserir_titulo(
+                        cliente_id=cliente_id,
+                        numero_titulo=num_dup,
+                        valor=float(val_dup or 0),
+                        vencimento=venc_dup,
+                        boleto_base64=pdf_dup_b64,
+                        nome_arquivo=pdf_dup.filename,
+                        nf_id=nf_id
+                    )
+                    boletos_salvos += 1
+                i += 1
+
+            if boletos_salvos > 0:
+                flash(f"NF {numero_nf} e {boletos_salvos} boleto(s) salvos com sucesso!", "sucesso")
+            else:
+                flash(f"NF {numero_nf} salva com sucesso!", "sucesso")
 
         elif tipo == "boleto":
             nf_id = request.form.get("nf_id")
@@ -481,9 +514,6 @@ def importar_clientes_excel(arquivo_bytes: bytes) -> dict:
         return {"sucesso": False, "erro": str(e)}
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# ROTA DE EXTRAÇÃO COM LOGS DE DEBUG (MANTIDA PARA TESTAR O XML)
-# ──────────────────────────────────────────────────────────────────────────────
 @app.route("/admin/extrair-xml", methods=["POST"])
 @login_admin_required
 def extrair_xml():
@@ -500,7 +530,6 @@ def extrair_xml():
         xml_bytes = arquivo.read()
         print(f">>> [3] Tamanho do ficheiro: {len(xml_bytes)} bytes")
         
-        # Chama o extrator
         dados = extrair_dados_xml(xml_bytes)
         print(f">>> [4] Dados retornados pelo extrator: {dados.get('sucesso')}")
         
