@@ -1,5 +1,5 @@
 """
-app.py — Portal do Cliente (Flask)
+app.py — Portal do Cliente (Flask) com Resend e Edição de Clientes
 """
 import base64
 import hashlib
@@ -15,9 +15,17 @@ import db
 from config import Config
 from extrator_pdf import extrair_dados_xml, pdf_para_base64
 
+try:
+    import resend
+except ImportError:
+    resend = None
+
 app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
+
+if resend:
+    resend.api_key = getattr(Config, 'RESEND_API_KEY', '')
 
 @app.context_processor
 def globals_template():
@@ -49,6 +57,26 @@ def login_admin_required(f):
             return redirect(url_for("login"))
         return f(*args, **kwargs)
     return decorated
+
+# ─── FUNÇÃO DE ENVIO DE E-MAIL VIA RESEND ────────────────────────────────────
+def enviar_email_notificacao(email_destino, assunto, mensagem_html):
+    if not resend or not email_destino or not getattr(resend, 'api_key', None):
+        return False
+    
+    try:
+        params = {
+            "from": f"{Config.NOME_ESCRITORIO} <nao-responda@seudominio.com.br>",
+            "to": [email_destino],
+            "subject": assunto,
+            "html": mensagem_html,
+        }
+        resend.Emails.send(params)
+        print(f"[E-mail Resend] Enviado com sucesso para {email_destino}")
+        return True
+    except Exception as e:
+        print(f"[E-mail Resend] Erro ao enviar para {email_destino}: {e}")
+        return False
+# ─────────────────────────────────────────────────────────────────────────────
 
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -206,6 +234,10 @@ def admin_upload():
         tipo, cliente_id = request.form.get("tipo"), int(request.form.get("cliente_id"))
         arquivo = request.files.get("arquivo")
 
+        cliente_alvo = next((c for c in clientes if c["id"] == cliente_id), None)
+        email_cliente = cliente_alvo["email"] if (cliente_alvo and "email" in cliente_alvo) else ""
+        nome_cliente = cliente_alvo["nome"] if cliente_alvo else "Cliente"
+
         if not arquivo or arquivo.filename == "":
             flash("Selecione um arquivo PDF.", "erro")
             return redirect(url_for("admin_upload"))
@@ -238,8 +270,23 @@ def admin_upload():
                     boletos_salvos += 1
                 i += 1
 
-            if boletos_salvos > 0: flash(f"NF {numero_nf} e {boletos_salvos} boleto(s) salvos com sucesso!", "sucesso")
-            else: flash(f"NF {numero_nf} salva com sucesso!", "sucesso")
+            if boletos_salvos > 0: 
+                flash(f"NF {numero_nf} e {boletos_salvos} boleto(s) salvos com sucesso!", "sucesso")
+            else: 
+                flash(f"NF {numero_nf} salva com sucesso!", "sucesso")
+
+            if email_cliente:
+                assunto = f"Nova Nota Fiscal - {Config.NOME_ESCRITORIO}"
+                html = f"""
+                <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px;">
+                    <h2 style="color: {Config.COR_PRIMARIA};">Olá, {nome_cliente}!</h2>
+                    <p>Uma nova <strong>Nota Fiscal (Nº {numero_nf})</strong> foi disponibilizada no seu portal.</p>
+                    <p>Acesse o sistema para verificar os valores, fazer o download dos boletos e acompanhar a entrega.</p>
+                    <br>
+                    <p>Atenciosamente,<br>Equipe {Config.NOME_ESCRITORIO}</p>
+                </div>
+                """
+                enviar_email_notificacao(email_cliente, assunto, html)
 
         elif tipo == "boleto":
             nf_id, numero_titulo = request.form.get("nf_id"), request.form.get("numero_titulo","")
@@ -248,6 +295,19 @@ def admin_upload():
                 vencimento=request.form.get("vencimento",""), boleto_base64=pdf_b64, nome_arquivo=arquivo.filename, nf_id=int(nf_id) if nf_id else None
             )
             flash(f"Boleto {numero_titulo} salvo!", "sucesso")
+
+            if email_cliente:
+                assunto = f"Novo Boleto Disponível - {Config.NOME_ESCRITORIO}"
+                html = f"""
+                <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px;">
+                    <h2 style="color: {Config.COR_PRIMARIA};">Olá, {nome_cliente}!</h2>
+                    <p>Um novo <strong>Boleto / Título (Nº {numero_titulo})</strong> foi adicionado ao seu painel financeiro.</p>
+                    <p>Acesse o portal para visualizar a data de vencimento e realizar o download para pagamento.</p>
+                    <br>
+                    <p>Atenciosamente,<br>Equipe {Config.NOME_ESCRITORIO}</p>
+                </div>
+                """
+                enviar_email_notificacao(email_cliente, assunto, html)
 
         return redirect(url_for("admin_upload"))
 
@@ -297,6 +357,29 @@ def admin_clientes():
         return redirect(url_for("admin_clientes"))
     return render_template("admin/clientes.html", clientes=db.listar_clientes())
 
+
+# ─── NOVA ROTA PARA EDITAR O CLIENTE ─────────────────────────────────────────
+@app.route("/admin/clientes/editar/<int:cliente_id>", methods=["POST"])
+@login_admin_required
+def admin_clientes_editar(cliente_id):
+    nome = request.form.get("nome", "").strip()
+    cnpj = request.form.get("cnpj", "").strip()
+    email = request.form.get("email", "").strip()
+    whatsapp = request.form.get("whatsapp", "").strip()
+    nova_senha = request.form.get("nova_senha", "").strip()
+    
+    senha_hasheada = hash_senha(nova_senha) if nova_senha else None
+    
+    try:
+        db.atualizar_cliente(cliente_id, nome, cnpj, email, whatsapp, senha_hasheada)
+        flash(f"Cliente {nome} atualizado com sucesso!", "sucesso")
+    except Exception as e:
+        flash(f"Erro ao atualizar cliente (CNPJ duplicado?): {str(e)}", "erro")
+        
+    return redirect(url_for("admin_clientes"))
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 @app.route("/admin/nfs", methods=["GET", "POST"])
 @login_admin_required
 def admin_nfs():
@@ -321,7 +404,6 @@ def admin_titulos():
 @app.route("/admin/extrair-xml", methods=["POST"])
 @login_admin_required
 def extrair_xml():
-    """Recebe XML da NF-e e extrai os dados localmente (Sem Custos)"""
     try:
         arquivo = request.files.get("xml")
         if not arquivo or arquivo.filename == "": return jsonify({"sucesso": False, "erro": "Nenhum arquivo"})
