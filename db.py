@@ -368,3 +368,12 @@ def listar_titulos_pendentes():
            ORDER BY t.criado_em DESC"""
     )
     return _rows_to_dicts(cur)
+
+
+def atualizar_cliente(cliente_id, nome, cnpj, email, whatsapp):
+    conn = get_conn()
+    conn.execute(
+        "UPDATE clientes SET nome=?, cnpj=?, email=?, whatsapp=? WHERE id=?",
+        [nome, cnpj, email, whatsapp, cliente_id]
+    )
+    conn.commit()

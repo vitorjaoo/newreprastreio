@@ -522,6 +522,25 @@ def admin_rastreio_remover(evento_id):
     return redirect(request.referrer or url_for("admin_rastreio"))
 
 
+
+@app.route("/admin/clientes/editar/<int:cliente_id>", methods=["POST"])
+@login_admin_required
+def admin_editar_cliente(cliente_id):
+    db.atualizar_cliente(
+        cliente_id,
+        request.form.get("nome",""),
+        request.form.get("cnpj",""),
+        request.form.get("email",""),
+        request.form.get("whatsapp",""),
+    )
+    # Atualiza senha se preenchida
+    nova_senha = request.form.get("nova_senha","").strip()
+    if nova_senha:
+        db.atualizar_senha(cliente_id, hash_senha(nova_senha))
+    flash("Cliente atualizado com sucesso!", "sucesso")
+    return redirect(url_for("admin_clientes"))
+
+
 @app.route("/admin/clientes", methods=["GET", "POST"])
 @login_admin_required
 def admin_clientes():
