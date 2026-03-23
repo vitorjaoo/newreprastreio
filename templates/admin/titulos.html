@@ -7,11 +7,11 @@
 <div class="stats-grid" style="margin-bottom:1.75rem">
   <div class="stat-card">
     <div class="stat-label">Em aberto</div>
-    <div class="stat-value red">R$ {{ "%.2f"|format(em_aberto)|replace('.', ',') }}</div>
+    <div class="stat-value red">R$ {{ em_aberto }}</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Recebido</div>
-    <div class="stat-value green">R$ {{ "%.2f"|format(recebido)|replace('.', ',') }}</div>
+    <div class="stat-value green">R$ {{ recebido }}</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Títulos abertos</div>
@@ -25,7 +25,7 @@
   🔔 <strong>{{ pendentes|length }} pagamento(s) aguardando sua confirmação</strong>
   {% for t in pendentes %}
   <div style="margin-top:.5rem;display:flex;align-items:center;justify-content:space-between;background:white;padding:.5rem 1rem;border-radius:8px;border:1px solid var(--gray-200)">
-    <span><strong>{{ t.cliente }}</strong> — {{ t.numero_titulo }} — R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}</span>
+    <span><strong>{{ t.cliente }}</strong> — {{ t.numero_titulo }} — R$ {{ t.valor }}</span>
     <form method="POST" action="{{ url_for('admin_validar_pagamento', titulo_id=t.id) }}">
       <button type="submit" class="btn btn-success btn-sm">✅ Confirmar pagamento</button>
     </form>
