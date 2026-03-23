@@ -41,24 +41,21 @@ def login_required(role=None):
 @app.route("/", methods=["GET", "POST"])
 def login():
     if session.get("perfil"):
-        if session["perfil"] == "admin":
+        if session["perfil"] in ["admin", "leitor"]:
             return redirect(url_for("admin_dashboard"))
         return redirect(url_for("dashboard"))
         
     if request.method == "POST":
         u, s = request.form.get("cnpj", "").strip(), request.form.get("senha", "").strip()
         
-        # Login do Admin
         if u.lower() == "admin" and s == Config.ADMIN_SENHA:
             session.update({"perfil": "admin", "usuario": {"nome": "Admin"}})
             return redirect(url_for("admin_dashboard"))
             
-        # Login da Equipe (Redireciona para o Painel do Cliente)
         if u.lower() == "equipe" and s == Config.EQUIPE_SENHA:
-            session.update({"perfil": "leitor", "usuario": {"nome": "Visão Geral", "id": 0}})
-            return redirect(url_for("dashboard"))
+            session.update({"perfil": "leitor", "usuario": {"nome": "Equipe Interna", "id": 0}})
+            return redirect(url_for("admin_dashboard"))
             
-        # Login do Cliente
         c = db.buscar_cliente_cnpj(u)
         if c and hash_senha(s) == c["senha_hash"] and c["ativo"]:
             session.update({"perfil": "cliente", "usuario": c})
@@ -72,36 +69,23 @@ def sair():
     session.clear()
     return redirect(url_for("login"))
 
-# ─── ROTAS DO CLIENTE & EQUIPE (VISÃO EM CARTÕES) ────────────────────────────
-
+# ─── ROTAS DO CLIENTE ────────────────────────────────────────────────────────
 @app.route("/dashboard")
 @login_required()
 def dashboard():
-    if session["perfil"] == "admin":
-        return redirect(url_for("admin_dashboard"))
-
-    if session["perfil"] == "leitor":
-        nfs = db.listar_todas_nfs()
-        titulos = db.listar_todos_titulos()
-        # Injeta o nome do cliente no nº da NF/Boleto para a equipa identificar
-        for n in nfs:
-            n["numero_nf"] = f"{n['numero_nf']} ({n.get('cliente', '')})"
-        for t in titulos:
-            t["numero_titulo"] = f"{t['numero_titulo']} ({t.get('cliente', '')})"
-    else:
-        nfs = db.listar_nfs(session["usuario"]["id"])
-        titulos = db.listar_titulos(session["usuario"]["id"])
-
+    if session["perfil"] in ["admin", "leitor"]: return redirect(url_for("admin_dashboard"))
+    
+    nfs = db.listar_nfs(session["usuario"]["id"])
+    titulos = db.listar_titulos(session["usuario"]["id"])
     hoje = datetime.now().strftime("%Y-%m-%d")
     titulos_abertos  = [t for t in titulos if t["status"] == "aberto"]
     titulos_vencidos = []
+    
     for t in titulos_abertos:
         try:
             p = t["vencimento"].split("/")
-            if f"{p[2]}-{p[1]}-{p[0]}" < hoje:
-                titulos_vencidos.append(t)
-        except Exception:
-            pass
+            if f"{p[2]}-{p[1]}-{p[0]}" < hoje: titulos_vencidos.append(t)
+        except: pass
 
     for nf in nfs:
         nf["eventos"] = db.listar_eventos_rastreio(nf["id"])
@@ -112,16 +96,9 @@ def dashboard():
 @app.route("/financeiro")
 @login_required()
 def financeiro():
-    if session["perfil"] == "admin":
-        return redirect(url_for("admin_dashboard"))
-
-    if session["perfil"] == "leitor":
-        titulos = db.listar_todos_titulos()
-        for t in titulos:
-            t["numero_titulo"] = f"{t['numero_titulo']} ({t.get('cliente', '')})"
-    else:
-        titulos = db.listar_titulos(session["usuario"]["id"])
-
+    if session["perfil"] in ["admin", "leitor"]: return redirect(url_for("admin_dashboard"))
+    
+    titulos = db.listar_titulos(session["usuario"]["id"])
     hoje = datetime.now().strftime("%Y-%m-%d")
     from datetime import date
     for t in titulos:
@@ -132,7 +109,7 @@ def financeiro():
             hoje_date = date.today()
             t["dias_vencimento"] = (venc_date - hoje_date).days
             t["status_visual"] = "vencido" if t["status"] == "aberto" and iso < hoje else t["status"]
-        except Exception:
+        except:
             t["status_visual"] = t["status"]
             t["dias_vencimento"] = None
 
@@ -143,18 +120,9 @@ def financeiro():
 @app.route("/entrega/<int:nf_id>")
 @login_required()
 def entrega(nf_id):
-    if session["perfil"] == "admin":
-        return redirect(url_for("admin_dashboard"))
-
-    if session["perfil"] == "leitor":
-        nfs = db.listar_todas_nfs()
-        titulos_nf = [t for t in db.listar_todos_titulos() if t.get("nf_id") == nf_id]
-        for t in titulos_nf:
-            t["numero_titulo"] = f"{t['numero_titulo']} ({t.get('cliente', '')})"
-    else:
-        nfs = db.listar_nfs(session["usuario"]["id"])
-        titulos_nf = [t for t in db.listar_titulos(session["usuario"]["id"]) if t.get("nf_id") == nf_id]
-
+    if session["perfil"] in ["admin", "leitor"]: return redirect(url_for("admin_dashboard"))
+    
+    nfs = db.listar_nfs(session["usuario"]["id"])
     nf = next((n for n in nfs if n["id"] == nf_id), None)
     if not nf:
         flash("Nota fiscal não encontrada.", "erro")
@@ -162,22 +130,20 @@ def entrega(nf_id):
 
     nf["eventos"] = db.listar_eventos_rastreio(nf_id)
     nf["pdf"] = db.get_pdf_nf(nf_id)
+    titulos_nf = [t for t in db.listar_titulos(session["usuario"]["id"]) if t.get("nf_id") == nf_id]
     return render_template("entrega.html", nf=nf, titulos=titulos_nf)
 
 @app.route("/trocar-senha", methods=["GET", "POST"])
 @login_required()
 def trocar_senha():
-    if session["perfil"] != "cliente":
-        flash("Apenas clientes podem trocar senha aqui.", "erro")
-        return redirect(url_for("dashboard"))
-        
+    if session["perfil"] != "cliente": return redirect(url_for("admin_dashboard"))
     cliente = session["usuario"]
     if request.method == "POST":
         atual, nova, conf = request.form.get("senha_atual", ""), request.form.get("senha_nova", ""), request.form.get("confirmar", "")
         dados = db.buscar_cliente_cnpj(cliente["cnpj"])
         if hash_senha(atual) != dados["senha_hash"]: flash("Senha atual incorreta.", "erro")
         elif nova != conf: flash("As senhas não coincidem.", "erro")
-        elif len(nova) < 4: flash("A nova senha deve ter pelo menos 4 caracteres.", "erro")
+        elif len(nova) < 4: flash("A nova senha deve ter no mínimo 4 caracteres.", "erro")
         else:
             db.atualizar_senha(cliente["id"], hash_senha(nova))
             flash("Senha alterada com sucesso!", "sucesso")
@@ -192,8 +158,7 @@ def download_nf(nf_id):
         if not any(n["id"] == nf_id for n in nfs): return "Não autorizado", 403
     dados = db.get_pdf_nf(nf_id)
     if not dados or not dados.get("pdf_base64"): return "PDF não disponível", 404
-    pdf_bytes = base64.b64decode(dados["pdf_base64"])
-    return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"NF_{nf_id}.pdf")
+    return send_file(io.BytesIO(base64.b64decode(dados["pdf_base64"])), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"NF_{nf_id}.pdf")
 
 @app.route("/download/boleto/<int:titulo_id>")
 @login_required()
@@ -203,14 +168,13 @@ def download_boleto(titulo_id):
         if not any(t["id"] == titulo_id for t in titulos): return "Não autorizado", 403
     dados = db.get_pdf_titulo(titulo_id)
     if not dados or not dados.get("boleto_base64"): return "PDF não disponível", 404
-    pdf_bytes = base64.b64decode(dados["boleto_base64"])
-    return send_file(io.BytesIO(pdf_bytes), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"Boleto_{titulo_id}.pdf")
+    return send_file(io.BytesIO(base64.b64decode(dados["boleto_base64"])), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"Boleto_{titulo_id}.pdf")
 
-# ─── ROTAS DO ADMIN (SÓ O ADMINISTRADOR TEM ACESSO) ──────────────────────────
-
+# ─── ROTAS DO ADMIN / EQUIPA ─────────────────────────────────────────────────
 @app.route("/admin")
-@login_required("admin")
+@login_required()
 def admin_dashboard():
+    if session["perfil"] not in ["admin", "leitor"]: return redirect(url_for("dashboard"))
     nfs = db.listar_todas_nfs()
     titulos = db.listar_todos_titulos()
     clientes = db.listar_clientes()
@@ -240,13 +204,20 @@ def admin_upload():
                         boletos_salvos += 1
                     i += 1
                 flash(f"NF {numero_nf} salva com {boletos_salvos} boletos!", "sucesso")
+            elif tipo == "boleto":
+                db.inserir_titulo(int(request.form["cliente_id"]), request.form["numero_titulo"], float(request.form["valor"]), request.form["vencimento"], pdf_b64, arquivo.filename, request.form.get("nf_id"))
+                flash("Boleto salvo!", "sucesso")
         return redirect(url_for("admin_upload"))
     return render_template("admin/upload.html", clientes=db.listar_clientes(), tipo_ativo=request.args.get("tipo", "nf"))
 
 @app.route("/admin/clientes", methods=["GET", "POST"])
-@login_required("admin")
+@login_required()
 def admin_clientes():
+    if session["perfil"] not in ["admin", "leitor"]: return redirect(url_for("dashboard"))
     if request.method == "POST":
+        if session["perfil"] == "leitor":
+            flash("Acesso Negado. Apenas visualização.", "erro")
+            return redirect(url_for("admin_clientes"))
         acao = request.form.get("acao")
         if acao == "cadastrar":
             db.criar_cliente(request.form["nome"], request.form["cnpj"], request.form.get("email"), request.form.get("whatsapp"), hash_senha(request.form["senha"]))
@@ -262,19 +233,40 @@ def admin_clientes_editar(cid):
     db.atualizar_cliente(cid, request.form["nome"], request.form["cnpj"], request.form["email"], request.form["whatsapp"], hash_senha(ns) if ns else None)
     return redirect(url_for("admin_clientes"))
 
-@app.route("/admin/nfs")
-@login_required("admin")
+@app.route("/admin/nfs", methods=["GET", "POST"])
+@login_required()
 def admin_nfs():
+    if session["perfil"] not in ["admin", "leitor"]: return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        if session["perfil"] == "leitor":
+            flash("Acesso Negado.", "erro")
+            return redirect(url_for("admin_nfs"))
+        db.atualizar_status_nf(int(request.form["nf_id"]), request.form.get("status",""), request.form.get("observacao",""))
+        flash("NF atualizada!", "sucesso")
+        return redirect(url_for("admin_nfs"))
     return render_template("admin/nfs.html", nfs=db.listar_todas_nfs())
 
-@app.route("/admin/titulos")
-@login_required("admin")
+@app.route("/admin/titulos", methods=["GET", "POST"])
+@login_required()
 def admin_titulos():
-    return render_template("admin/titulos.html", titulos=db.listar_todos_titulos())
+    if session["perfil"] not in ["admin", "leitor"]: return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        if session["perfil"] == "leitor":
+            flash("Acesso Negado.", "erro")
+            return redirect(url_for("admin_titulos"))
+        db.marcar_titulo_pago(int(request.form["titulo_id"]))
+        flash("Marcado como pago!", "sucesso")
+        return redirect(url_for("admin_titulos"))
+        
+    titulos = db.listar_todos_titulos()
+    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
+    recebido = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
+    return render_template("admin/titulos.html", titulos=titulos, em_aberto=em_aberto, recebido=recebido)
 
 @app.route("/admin/rastreio")
-@login_required("admin")
+@login_required()
 def admin_rastreio():
+    if session["perfil"] not in ["admin", "leitor"]: return redirect(url_for("dashboard"))
     nfs = db.listar_todas_nfs()
     for n in nfs: n["eventos"] = db.listar_eventos_rastreio(n["id"])
     return render_template("admin/rastreio.html", nfs=nfs)
