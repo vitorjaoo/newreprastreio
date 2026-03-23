@@ -1,164 +1,125 @@
 {% extends "base.html" %}
-{% block title %}NF {{ nf.numero_nf }}{% endblock %}
-{% block page_title %}Detalhes da Entrega{% endblock %}
+
+{% block title %}Detalhes da Entrega{% endblock %}
+{% block page_title %}Detalhes da NF {{ nf.numero_nf }}{% endblock %}
 
 {% block content %}
-
-<div style="margin-bottom:1rem">
-  <a href="{{ url_for('dashboard') }}" class="btn btn-outline btn-sm">
-    <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd"/></svg>
-    Voltar
-  </a>
+<div style="margin-bottom: 20px;">
+    <a href="{{ url_for('dashboard') }}" style="text-decoration: none; color: var(--gray-500); font-weight: 500;">← Voltar para o Dashboard</a>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 360px;gap:1.5rem;align-items:start">
-
-  {# Coluna principal — rastreio #}
-  <div>
-    {# Header da NF #}
-    <div class="card" style="margin-bottom:1.25rem">
-      <div class="card-body">
-        <div class="flex-between">
-          <div>
-            <div style="font-size:1.25rem;font-weight:700;color:var(--gray-800)">NF {{ nf.numero_nf }}</div>
-            {% if nf.representada %}
-            <div style="font-size:.875rem;color:var(--gray-400);margin-top:3px">🏭 {{ nf.representada }}</div>
+<div class="grid-entrega" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    
+    <div style="display: flex; flex-direction: column; gap: 20px;">
+        
+        <div class="card" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; margin-bottom: 20px; border-bottom: 1px solid #edf2f7; padding-bottom: 10px; color: var(--gray-800);">Informações da Nota Fiscal</h3>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                <div>
+                    <span style="color: var(--gray-500); font-size: 0.85em; display: block;">Número</span>
+                    <strong style="color: var(--gray-800); font-size: 1.1em;">{{ nf.numero_nf }}</strong>
+                </div>
+                <div>
+                    <span style="color: var(--gray-500); font-size: 0.85em; display: block;">Valor Total</span>
+                    <strong style="color: var(--gray-800); font-size: 1.1em;">R$ {{ nf.valor }}</strong>
+                </div>
+                <div>
+                    <span style="color: var(--gray-500); font-size: 0.85em; display: block;">Data de Emissão</span>
+                    <strong style="color: var(--gray-800);">{{ nf.data_emissao }}</strong>
+                </div>
+                {% if nf.transportadora %}
+                <div>
+                    <span style="color: var(--gray-500); font-size: 0.85em; display: block;">Transportadora</span>
+                    <strong style="color: var(--gray-800);">{{ nf.transportadora }}</strong>
+                </div>
+                {% endif %}
+            </div>
+            
+            {% if nf.observacao %}
+            <div style="background: #f7fafc; padding: 12px; border-radius: 6px; border-left: 3px solid #cbd5e0; margin-bottom: 20px;">
+                <span style="color: var(--gray-500); font-size: 0.85em; display: block; margin-bottom: 4px;">Observação</span>
+                <span style="color: var(--gray-700); font-size: 0.95em;">{{ nf.observacao }}</span>
+            </div>
             {% endif %}
-          </div>
-          {% set s = nf.status or 'ativo' %}
-          {% if s == 'entregue' %}
-            <span class="badge badge-green" style="font-size:.875rem;padding:6px 14px"><span class="badge-dot"></span>Entregue</span>
-          {% elif s == 'cancelado' %}
-            <span class="badge badge-red" style="font-size:.875rem;padding:6px 14px"><span class="badge-dot"></span>Cancelado</span>
-          {% else %}
-            <span class="badge badge-blue" style="font-size:.875rem;padding:6px 14px"><span class="badge-dot"></span>{{ s|title if s != 'ativo' else 'Em andamento' }}</span>
-          {% endif %}
+
+            <a href="{{ url_for('download_nf', nf_id=nf.id) }}" class="btn" style="width: 100%; text-align: center; padding: 12px; background: var(--gray-800, #2d3748); color: #fff; text-decoration: none; border-radius: 6px; font-weight: 500;">
+                📥 Baixar Nota Fiscal (PDF)
+            </a>
         </div>
 
-        <hr class="divider">
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;font-size:.875rem">
-          {% if nf.data_emissao %}
-          <div>
-            <div class="text-muted">Data de emissão</div>
-            <div style="font-weight:500;margin-top:2px">{{ nf.data_emissao }}</div>
-          </div>
-          {% endif %}
-          {% if nf.observacao %}
-          <div>
-            <div class="text-muted">Prev. de entrega</div>
-            <div style="font-weight:500;margin-top:2px;color:var(--primary)">{{ nf.observacao }}</div>
-          </div>
-          {% endif %}
-          {% if nf.valor %}
-          <div>
-            <div class="text-muted">Valor</div>
-            <div style="font-weight:600;margin-top:2px">R$ {{ "%.2f"|format(nf.valor|float)|replace('.', ',') }}</div>
-          </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    {# Timeline de rastreio #}
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">📦 Rastreio da Entrega</span>
-      </div>
-      <div class="card-body">
-        {% if nf.eventos %}
-        <div class="timeline">
-          {% for ev in nf.eventos %}
-          {% set is_last = loop.last %}
-          <div class="timeline-item">
-            <div class="timeline-dot {{ 'current' if is_last else 'done' }}">
-              {% if is_last %}
-                <svg viewBox="0 0 20 20" fill="white"><circle cx="10" cy="10" r="4"/></svg>
-              {% else %}
-                <svg viewBox="0 0 20 20" fill="none" stroke="#059669" stroke-width="2.5"><path d="M5 10l4 4 6-6"/></svg>
-              {% endif %}
-            </div>
-            <div class="timeline-body">
-              <div class="timeline-desc {{ 'current' if is_last else '' }}">{{ ev.descricao }}</div>
-              <div class="timeline-date">{{ ev.data_hora }}</div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-        {% else %}
-        <div class="empty-state" style="padding:2rem">
-          <p>Nenhuma atualização de rastreio ainda.<br>
-          <span style="font-size:.8rem">O escritório atualizará em breve.</span></p>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  {# Coluna lateral — documentos #}
-  <div style="display:flex;flex-direction:column;gap:1.25rem">
-
-    {# Download NF #}
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">📄 Nota Fiscal</span>
-      </div>
-      <div class="card-body">
-        {% if nf.pdf and nf.pdf.pdf_base64 %}
-        <a href="{{ url_for('download_nf', nf_id=nf.id) }}"
-           class="btn btn-primary btn-full">
-          <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-          Baixar NF (PDF)
-        </a>
-        {% else %}
-        <p class="text-muted" style="text-align:center">PDF não disponível</p>
-        {% endif %}
-      </div>
-    </div>
-
-    {# Boletos vinculados #}
-    {% if titulos %}
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">🧾 Boletos</span>
-      </div>
-      <div class="card-body" style="display:flex;flex-direction:column;gap:.75rem">
-        {% for t in titulos %}
-        <div style="padding:.75rem;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-100)">
-          <div class="flex-between" style="margin-bottom:.5rem">
-            <span style="font-size:.875rem;font-weight:600">{{ t.numero_titulo }}</span>
-            {% if t.status == 'pago' %}
-              <span class="badge badge-green">Pago</span>
+        <div class="card" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h3 style="margin-top: 0; margin-bottom: 20px; border-bottom: 1px solid #edf2f7; padding-bottom: 10px; color: var(--gray-800);">Boletos Desta Entrega</h3>
+            
+            {% if titulos %}
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                {% for t in titulos %}
+                    <div style="border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; background: {% if t.status == 'pago' %}#f0fff4{% else %}#fff{% endif %};">
+                        <div>
+                            <strong style="display: block; color: var(--gray-800); margin-bottom: 4px;">Duplicata: {{ t.numero_titulo }}</strong>
+                            <span style="font-size: 0.9em; color: var(--gray-500); display: block;">Vencimento: {{ t.vencimento }}</span>
+                            <span style="font-size: 0.9em; color: var(--gray-700); font-weight: 600;">R$ {{ t.valor }}</span>
+                        </div>
+                        <div style="text-align: right;">
+                            {% if t.status == 'pago' %}
+                                <span style="color: #38a169; font-weight: 600; font-size: 0.9em; display: flex; align-items: center; gap: 4px;"><svg width="16" height="16" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg> Pago</span>
+                            {% else %}
+                                <span style="color: #dd6b20; font-weight: 600; font-size: 0.85em; display: block; margin-bottom: 8px;">⏳ Em Aberto</span>
+                                <a href="{{ url_for('download_boleto', titulo_id=t.id) }}" style="font-size: 0.85em; text-decoration: none; background: #edf2f7; padding: 6px 12px; border-radius: 6px; color: #2d3748; font-weight: 500;">Baixar Boleto</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+                </div>
             {% else %}
-              <span class="badge badge-amber">Em aberto</span>
+                <p style="color: var(--gray-500); text-align: center; padding: 10px;">Nenhum boleto cadastrado para esta nota.</p>
             {% endif %}
-          </div>
-          <div style="font-size:.8rem;color:var(--gray-400);margin-bottom:.65rem">
-            Venc: {{ t.vencimento }} ·
-            R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}
-          </div>
-          {% if t.status == 'aberto' %}
-          <a href="{{ url_for('download_boleto', titulo_id=t.id) }}"
-             class="btn btn-outline btn-sm btn-full">
-            <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-            Baixar Boleto
-          </a>
-          {% endif %}
         </div>
-        {% endfor %}
-      </div>
     </div>
-    {% endif %}
 
-  </div>
+    <div>
+        <div class="card" style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 25px; background: #fff; height: 100%; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #edf2f7; padding-bottom: 10px; margin-bottom: 25px;">
+                <h3 style="margin: 0; color: var(--gray-800);">Status de Entrega</h3>
+                {% if nf.codigo_rastreio %}
+                    <span style="background: #ebf8ff; color: #3182ce; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 600;">Cód: {{ nf.codigo_rastreio }}</span>
+                {% endif %}
+            </div>
+            
+            {% if nf.eventos %}
+                <div class="timeline" style="position: relative; padding-left: 24px; margin-top: 20px;">
+                    <div style="position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: #e2e8f0;"></div>
+                    
+                    {% for evento in nf.eventos|reverse %}
+                    <div style="position: relative; margin-bottom: 25px;">
+                        <div style="position: absolute; left: -24px; top: 4px; width: 14px; height: 14px; border-radius: 50%; background: {% if loop.first %}#3182ce{% else %}#cbd5e0{% endif %}; border: 3px solid #fff; box-shadow: 0 0 0 1px {% if loop.first %}#3182ce{% else %}#cbd5e0{% endif %};"></div>
+                        
+                        <strong style="display: block; font-size: 1.05em; color: {% if loop.first %}var(--gray-800){% else %}var(--gray-500){% endif %}; margin-bottom: 2px;">{{ evento.status }}</strong>
+                        <span style="font-size: 0.85em; color: var(--gray-500); display: block; margin-bottom: 6px;">{{ evento.data }}</span>
+                        
+                        {% if evento.observacao %}
+                            <p style="font-size: 0.9em; color: var(--gray-600); margin-top: 5px; background: #f7fafc; padding: 10px; border-radius: 6px; border: 1px solid #edf2f7;">{{ evento.observacao }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div style="text-align: center; padding: 40px 20px; color: var(--gray-500);">
+                    <span style="font-size: 3em; display: block; margin-bottom: 15px; opacity: 0.5;">🚚</span>
+                    <strong style="display: block; color: var(--gray-700); margin-bottom: 5px;">Rastreamento não iniciado</strong>
+                    Em breve teremos atualizações sobre o trajeto desta entrega.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
 
-{# Responsivo #}
 <style>
-@media (max-width: 768px) {
-  div[style*="grid-template-columns:1fr 360px"] {
-    grid-template-columns: 1fr !important;
-  }
-}
+    @media (max-width: 900px) {
+        .grid-entrega {
+            grid-template-columns: 1fr !important;
+        }
+    }
 </style>
 {% endblock %}
