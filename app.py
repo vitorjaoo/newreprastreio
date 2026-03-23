@@ -10,13 +10,25 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
 
+# 🔹 FORMATADOR UNIVERSAL DE MOEDA (Ex: 2.889,90) 🔹
+def formatar_moeda(valor):
+    try:
+        if valor is None or str(valor).strip() == "":
+            return "0,00"
+        v = float(valor)
+        # Formata com separador de milhar e inverte vírgulas/pontos para o padrão local
+        return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return "0,00"
+
 @app.context_processor
 def globals_template():
     return {
         "nome_escritorio": Config.NOME_ESCRITORIO,
         "cor_primaria": Config.COR_PRIMARIA,
         "cor_secundaria": Config.COR_SECUNDARIA,
-        "now": datetime.now().strftime("%d/%m/%Y %H:%M")
+        "now": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "formatar_moeda": formatar_moeda
     }
 
 with app.app_context():
@@ -107,6 +119,10 @@ def dashboard():
     for nf in nfs:
         nf["eventos"] = db.listar_eventos_rastreio(nf["id"])
         nf["tem_rastreio"] = len(nf["eventos"]) > 0
+        nf["valor"] = formatar_moeda(nf.get("valor")) # Aplica a máscara
+
+    for t in titulos:
+        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
 
     return render_template("dashboard.html", nfs=nfs, titulos_abertos=titulos_abertos, titulos_vencidos=titulos_vencidos)
 
@@ -126,6 +142,15 @@ def financeiro():
     hoje = datetime.now().strftime("%Y-%m-%d")
     hoje_date = date.today()
     
+    # 1. Faz as contas primeiro usando os números puros
+    em_aberto_val = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
+    quitado_val   = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
+    
+    # 2. Formata os totais para exibir na tela
+    em_aberto = formatar_moeda(em_aberto_val)
+    quitado = formatar_moeda(quitado_val)
+
+    # 3. Formata os boletos individuais
     for t in titulos:
         iso = parse_vencimento(t.get("vencimento"))
         t["data_ordem"] = iso
@@ -140,10 +165,10 @@ def financeiro():
         else:
             t["status_visual"] = t["status"]
             t["dias_vencimento"] = None
+            
+        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
 
     titulos.sort(key=lambda x: x["data_ordem"])
-    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
-    quitado   = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
     
     return render_template("financeiro.html", titulos=titulos, em_aberto=em_aberto, quitado=quitado)
 
@@ -175,9 +200,12 @@ def entrega(nf_id):
 
     nf["eventos"] = db.listar_eventos_rastreio(nf_id)
     nf["pdf"] = db.get_pdf_nf(nf_id)
+    nf["valor"] = formatar_moeda(nf.get("valor")) # Aplica a máscara
     
     for t in titulos_nf:
         t["data_ordem"] = parse_vencimento(t.get("vencimento"))
+        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
+        
     titulos_nf.sort(key=lambda x: x["data_ordem"])
     
     return render_template("entrega.html", nf=nf, titulos=titulos_nf)
@@ -227,7 +255,10 @@ def admin_dashboard():
     nfs = db.listar_todas_nfs()
     titulos = db.listar_todos_titulos()
     clientes = db.listar_clientes()
-    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
+    
+    em_aberto_val = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
+    em_aberto = formatar_moeda(em_aberto_val) # Aplica a máscara
+    
     titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
     return render_template("admin/dashboard.html", total_clientes=len(clientes), total_nfs=len(nfs), titulos_abertos=titulos_abertos, em_aberto=em_aberto)
 
@@ -253,7 +284,6 @@ def admin_upload():
             if tipo == "nf":
                 numero_nf = request.form.get("numero_nf", "")
                 
-                # Conversão blindada de moeda
                 v_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
                 try: valor = float(v_str) if v_str else 0.0
                 except ValueError: valor = 0.0
@@ -270,12 +300,10 @@ def admin_upload():
                 )
                 
                 boletos_salvos = 0
-                
-                # Substituímos o "while True" por um Loop seguro de no máximo 50 boletos
                 for i in range(50):
                     num_dup = request.form.get(f"dup_num_{i}")
                     if not num_dup or str(num_dup).strip() == "":
-                        continue  # Se estiver em branco ou não existir, ignora e avança
+                        continue
                         
                     p_pdf = request.files.get(f"pdf_boleto_{i}")
                     if p_pdf and p_pdf.filename:
@@ -310,7 +338,6 @@ def admin_upload():
                 flash("Selecione se é uma Nota Fiscal ou um Boleto.", "erro")
                 
         except Exception as e:
-            # Em caso de qualquer erro grave, força o registro no terminal do Railway e avisa
             print(">>> ERRO NO SISTEMA DE UPLOAD: ", str(e), file=sys.stderr, flush=True)
             flash(f"Falha ao salvar. Verifique os dados. Erro: {str(e)}", "erro")
             
@@ -340,11 +367,17 @@ def admin_clientes_editar(cid):
 @app.route("/admin/nfs", methods=["GET", "POST"])
 @login_required("admin")
 def admin_nfs():
+    nfs = db.listar_todas_nfs()
+    
     if request.method == "POST":
         db.atualizar_status_nf(int(request.form["nf_id"]), request.form.get("status",""), request.form.get("observacao",""))
         flash("NF atualizada!", "sucesso")
         return redirect(url_for("admin_nfs"))
-    return render_template("admin/nfs.html", nfs=db.listar_todas_nfs())
+        
+    for n in nfs:
+        n["valor"] = formatar_moeda(n.get("valor")) # Aplica a máscara
+        
+    return render_template("admin/nfs.html", nfs=nfs)
 
 @app.route("/admin/nfs/deletar/<int:nf_id>", methods=["POST"])
 @login_required("admin")
@@ -365,8 +398,16 @@ def admin_titulos():
         return redirect(url_for("admin_titulos"))
         
     titulos = db.listar_todos_titulos()
-    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
-    recebido = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
+    
+    em_aberto_val = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
+    recebido_val = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
+    
+    em_aberto = formatar_moeda(em_aberto_val)
+    recebido = formatar_moeda(recebido_val)
+    
+    for t in titulos:
+        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
+        
     return render_template("admin/titulos.html", titulos=titulos, em_aberto=em_aberto, recebido=recebido)
 
 @app.route("/admin/rastreio")
