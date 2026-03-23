@@ -74,7 +74,6 @@ def sair():
 @app.route("/dashboard")
 @login_required()
 def dashboard():
-    # Se for admin, vai para o painel de admin. Se for equipe, a rota é tratada no /admin.
     if session["perfil"] in ["admin", "leitor"]: 
         return redirect(url_for("admin_dashboard"))
     
@@ -99,7 +98,6 @@ def dashboard():
 @app.route("/admin")
 @login_required()
 def admin_dashboard():
-    # O ADMIN vê os totais clássicos do escritório
     if session["perfil"] == "admin":
         nfs = db.listar_todas_nfs()
         titulos = db.listar_todos_titulos()
@@ -108,12 +106,10 @@ def admin_dashboard():
         titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
         return render_template("admin/dashboard.html", total_clientes=len(clientes), total_nfs=len(nfs), titulos_abertos=titulos_abertos, em_aberto=em_aberto)
     
-    # A EQUIPE vê a página do Cliente (cartões), mas com TODOS os dados
     elif session["perfil"] == "leitor":
         nfs = db.listar_todas_nfs()
         titulos = db.listar_todos_titulos()
         
-        # Acrescentar o nome do cliente no nº para facilitar
         for n in nfs:
             n["numero_nf"] = f"{n['numero_nf']} - {n.get('cliente', '')}"
         for t in titulos:
@@ -143,13 +139,11 @@ def entrega(nf_id):
     if session["perfil"] == "admin": 
         return redirect(url_for("admin_dashboard"))
     
-    # Se for Equipa, puxa de todas as notas do sistema
     if session["perfil"] == "leitor":
         nfs = db.listar_todas_nfs()
         titulos_nf = [t for t in db.listar_todos_titulos() if t.get("nf_id") == nf_id]
         for t in titulos_nf:
             t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
-    # Se for Cliente, puxa apenas das notas dele
     else:
         nfs = db.listar_nfs(session["usuario"]["id"])
         titulos_nf = [t for t in db.listar_titulos(session["usuario"]["id"]) if t.get("nf_id") == nf_id]
@@ -290,6 +284,17 @@ def admin_nfs():
         flash("NF atualizada!", "sucesso")
         return redirect(url_for("admin_nfs"))
     return render_template("admin/nfs.html", nfs=db.listar_todas_nfs())
+
+# ---> NOVA ROTA ADICIONADA AQUI PARA APAGAR AS NFS <---
+@app.route("/admin/nfs/deletar/<int:nf_id>", methods=["POST"])
+@login_required("admin")
+def admin_deletar_nf(nf_id):
+    try:
+        db.deletar_nf(nf_id)
+        flash("Nota Fiscal apagada com sucesso!", "sucesso")
+    except Exception as e:
+        flash(f"Erro ao apagar NF: {str(e)}", "erro")
+    return redirect(url_for("admin_nfs"))
 
 @app.route("/admin/titulos", methods=["GET", "POST"])
 @login_required()
