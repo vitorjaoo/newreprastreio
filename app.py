@@ -1,6 +1,6 @@
 import base64, hashlib, io, re
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, jsonify
 import db
 from config import Config
@@ -37,6 +37,19 @@ def login_required(role=None):
             return f(*args, **kwargs)
         return decorated
     return decorator
+
+# 🔹 TRADUTOR DE DATAS PARA ORDENAÇÃO PERFEITA 🔹
+def parse_vencimento(v):
+    if not v: return "9999-12-31"
+    try:
+        if "-" in v and len(v.split("-")[0]) == 4:
+            return v  # Já está no formato YYYY-MM-DD
+        if "/" in v:
+            p = v.split("/")
+            return f"{p[2]}-{p[1]}-{p[0]}" # Converte DD/MM/YYYY para YYYY-MM-DD
+    except:
+        pass
+    return "9999-12-31"
 
 @app.route("/", methods=["GET", "POST"])
 def login():
@@ -90,13 +103,9 @@ def dashboard():
 
     hoje = datetime.now().strftime("%Y-%m-%d")
     titulos_abertos  = [t for t in titulos if t["status"] == "aberto"]
-    titulos_vencidos = []
     
-    for t in titulos_abertos:
-        try:
-            p = t["vencimento"].split("/")
-            if f"{p[2]}-{p[1]}-{p[0]}" < hoje: titulos_vencidos.append(t)
-        except: pass
+    # Usa a nova função para evitar erros de data
+    titulos_vencidos = [t for t in titulos_abertos if parse_vencimento(t.get("vencimento")) < hoje]
 
     for nf in nfs:
         nf["eventos"] = db.listar_eventos_rastreio(nf["id"])
@@ -118,24 +127,25 @@ def financeiro():
         titulos = db.listar_titulos(session["usuario"]["id"])
 
     hoje = datetime.now().strftime("%Y-%m-%d")
-    from datetime import date
+    hoje_date = date.today()
     
-    # Prepara os títulos com a data invertida (YYYY-MM-DD) para podermos ordenar corretamente
     for t in titulos:
-        try:
-            p = t["vencimento"].split("/")
-            iso = f"{p[2]}-{p[1]}-{p[0]}"
-            venc_date = date.fromisoformat(iso)
-            hoje_date = date.today()
-            t["dias_vencimento"] = (venc_date - hoje_date).days
-            t["status_visual"] = "vencido" if t["status"] == "aberto" and iso < hoje else t["status"]
-            t["data_ordem"] = iso
-        except:
+        iso = parse_vencimento(t.get("vencimento"))
+        t["data_ordem"] = iso
+        
+        if iso != "9999-12-31":
+            try:
+                venc_date = date.fromisoformat(iso)
+                t["dias_vencimento"] = (venc_date - hoje_date).days
+                t["status_visual"] = "vencido" if t["status"] == "aberto" and iso < hoje else t["status"]
+            except:
+                t["status_visual"] = t["status"]
+                t["dias_vencimento"] = None
+        else:
             t["status_visual"] = t["status"]
             t["dias_vencimento"] = None
-            t["data_ordem"] = "9999-12-31" # Se não tiver data, vai para o fim da lista
 
-    # ORDENAÇÃO CRONOLÓGICA: Do mais antigo (ou a vencer mais cedo) para o mais recente
+    # 🔹 ORDENAÇÃO CRONOLÓGICA (Mais antigo/vencido para o mais recente)
     titulos.sort(key=lambda x: x["data_ordem"])
 
     em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
@@ -143,12 +153,10 @@ def financeiro():
     
     return render_template("financeiro.html", titulos=titulos, em_aberto=em_aberto, quitado=quitado)
 
-# 🔹 NOVA ROTA ADICIONADA PARA EVITAR O ERRO DO BOTÃO NO FINANCEIRO 🔹
 @app.route("/solicitar-pagamento/<int:titulo_id>", methods=["POST"])
 @login_required()
 def solicitar_pagamento(titulo_id):
-    # Por enquanto, apenas mostra uma mensagem de sucesso para não quebrar a página
-    flash("Solicitação recebida com sucesso! Em breve entraremos em contacto.", "sucesso")
+    flash("Solicitação recebida com sucesso! Em breve entraremos em contato.", "sucesso")
     return redirect(url_for("financeiro"))
 
 @app.route("/entrega/<int:nf_id>")
