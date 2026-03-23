@@ -234,17 +234,46 @@ def admin_dashboard():
     titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
     return render_template("admin/dashboard.html", total_clientes=len(clientes), total_nfs=len(nfs), titulos_abertos=titulos_abertos, em_aberto=em_aberto)
 
+# 🔹 O SISTEMA DE UPLOAD FOI BLINDADO AQUI 🔹
 @app.route("/admin/upload", methods=["GET", "POST"])
 @login_required("admin")
 def admin_upload():
     if request.method == "POST":
-        tipo = request.form.get("tipo")
-        arquivo = request.files.get("arquivo")
-        if arquivo and arquivo.filename.endswith(".pdf"):
+        try:
+            tipo = request.form.get("tipo")
+            arquivo = request.files.get("arquivo")
+            
+            if not arquivo or not arquivo.filename:
+                flash("Por favor, selecione um ficheiro PDF.", "erro")
+                return redirect(url_for("admin_upload"))
+                
+            if not arquivo.filename.lower().endswith(".pdf"):
+                flash("O ficheiro precisa ser um PDF válido (.pdf).", "erro")
+                return redirect(url_for("admin_upload"))
+
             pdf_b64 = base64.b64encode(arquivo.read()).decode()
+            cliente_id = int(request.form["cliente_id"])
+            
             if tipo == "nf":
                 numero_nf = request.form.get("numero_nf")
-                nf_id = db.inserir_nf(int(request.form["cliente_id"]), numero_nf, float(request.form["valor"]), request.form["data_emissao"], pdf_b64, arquivo.filename, request.form.get("codigo_rastreio"), request.form.get("transportadora"), "ativo", request.form.get("observacao"), request.form.get("representada"))
+                
+                # Tratamento financeiro para não quebrar com vírgulas ou pontos
+                valor_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
+                valor = float(valor_str) if valor_str else 0.0
+                
+                nf_id = db.inserir_nf(
+                    cliente_id, 
+                    numero_nf, 
+                    valor, 
+                    request.form["data_emissao"], 
+                    pdf_b64, 
+                    arquivo.filename, 
+                    request.form.get("codigo_rastreio"), 
+                    request.form.get("transportadora"), 
+                    "ativo", 
+                    request.form.get("observacao"), 
+                    request.form.get("representada")
+                )
                 
                 boletos_salvos, i = 0, 0
                 while True:
@@ -252,14 +281,43 @@ def admin_upload():
                     if not num_dup: break
                     p_pdf = request.files.get(f"pdf_boleto_{i}")
                     if p_pdf and p_pdf.filename:
-                        db.inserir_titulo(int(request.form["cliente_id"]), num_dup, float(request.form[f"dup_val_{i}"]), request.form[f"dup_venc_{i}"], base64.b64encode(p_pdf.read()).decode(), p_pdf.filename, nf_id)
+                        # Tratamento financeiro para os boletos
+                        val_dup_str = request.form.get(f"dup_val_{i}", "0").replace(".", "").replace(",", ".")
+                        val_dup = float(val_dup_str) if val_dup_str else 0.0
+                        
+                        db.inserir_titulo(
+                            cliente_id, 
+                            num_dup, 
+                            val_dup, 
+                            request.form[f"dup_venc_{i}"], 
+                            base64.b64encode(p_pdf.read()).decode(), 
+                            p_pdf.filename, 
+                            nf_id
+                        )
                         boletos_salvos += 1
                     i += 1
                 flash(f"NF {numero_nf} salva com {boletos_salvos} boletos!", "sucesso")
+                
             elif tipo == "boleto":
-                db.inserir_titulo(int(request.form["cliente_id"]), request.form["numero_titulo"], float(request.form["valor"]), request.form["vencimento"], pdf_b64, arquivo.filename, request.form.get("nf_id"))
-                flash("Boleto salvo!", "sucesso")
+                valor_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
+                valor = float(valor_str) if valor_str else 0.0
+                
+                db.inserir_titulo(
+                    cliente_id, 
+                    request.form["numero_titulo"], 
+                    valor, 
+                    request.form["vencimento"], 
+                    pdf_b64, 
+                    arquivo.filename, 
+                    request.form.get("nf_id")
+                )
+                flash("Boleto salvo com sucesso!", "sucesso")
+                
+        except Exception as e:
+            flash(f"Ocorreu um erro ao salvar: {str(e)}", "erro")
+            
         return redirect(url_for("admin_upload"))
+        
     return render_template("admin/upload.html", clientes=db.listar_clientes(), tipo_ativo=request.args.get("tipo", "nf"))
 
 @app.route("/admin/clientes", methods=["GET", "POST"])
@@ -320,7 +378,6 @@ def admin_rastreio():
     for n in nfs: n["eventos"] = db.listar_eventos_rastreio(n["id"])
     return render_template("admin/rastreio.html", nfs=nfs)
 
-# 🔹 ROTA NOVA PARA O FORMULÁRIO DE RASTREIO 🔹
 @app.route("/admin/rastreio/adicionar", methods=["POST"])
 @login_required("admin")
 def admin_rastreio_adicionar():
@@ -330,7 +387,6 @@ def admin_rastreio_adicionar():
     observacao = request.form.get("observacao", "")
     
     try:
-        # Coloquei um try/except duplo para prevenir qualquer variação do nome da função no banco de dados!
         try:
             db.inserir_evento_rastreio(int(nf_id), data, status, observacao)
         except AttributeError:
