@@ -1,4 +1,4 @@
-import base64, hashlib, io, re
+import base64, hashlib, io, re, sys
 from functools import wraps
 from datetime import datetime, date
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, jsonify
@@ -81,7 +81,7 @@ def sair():
     session.clear()
     return redirect(url_for("login"))
 
-# ─── ROTAS DO CLIENTE E EQUIPE (CARTÕES) ─────────────────────────────────────
+# ─── ROTAS DO CLIENTE E EQUIPE ───────────────────────────────────────────────
 
 @app.route("/dashboard")
 @login_required()
@@ -129,7 +129,6 @@ def financeiro():
     for t in titulos:
         iso = parse_vencimento(t.get("vencimento"))
         t["data_ordem"] = iso
-        
         if iso != "9999-12-31":
             try:
                 venc_date = date.fromisoformat(iso)
@@ -143,7 +142,6 @@ def financeiro():
             t["dias_vencimento"] = None
 
     titulos.sort(key=lambda x: x["data_ordem"])
-
     em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
     quitado   = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
     
@@ -180,7 +178,6 @@ def entrega(nf_id):
     
     for t in titulos_nf:
         t["data_ordem"] = parse_vencimento(t.get("vencimento"))
-        
     titulos_nf.sort(key=lambda x: x["data_ordem"])
     
     return render_template("entrega.html", nf=nf, titulos=titulos_nf)
@@ -222,7 +219,7 @@ def download_boleto(titulo_id):
     if not dados or not dados.get("boleto_base64"): return "PDF não disponível", 404
     return send_file(io.BytesIO(base64.b64decode(dados["boleto_base64"])), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"Boleto_{titulo_id}.pdf")
 
-# ─── ROTAS DA ADMINISTRAÇÃO (APENAS O CHEFE) ─────────────────────────────────
+# ─── ROTAS DA ADMINISTRAÇÃO ──────────────────────────────────────────────────
 
 @app.route("/admin")
 @login_required("admin")
@@ -234,7 +231,6 @@ def admin_dashboard():
     titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
     return render_template("admin/dashboard.html", total_clientes=len(clientes), total_nfs=len(nfs), titulos_abertos=titulos_abertos, em_aberto=em_aberto)
 
-# 🔹 O SISTEMA DE UPLOAD FOI BLINDADO AQUI 🔹
 @app.route("/admin/upload", methods=["GET", "POST"])
 @login_required("admin")
 def admin_upload():
@@ -252,69 +248,71 @@ def admin_upload():
                 return redirect(url_for("admin_upload"))
 
             pdf_b64 = base64.b64encode(arquivo.read()).decode()
-            cliente_id = int(request.form["cliente_id"])
+            cliente_id = int(request.form.get("cliente_id", 0))
             
             if tipo == "nf":
-                numero_nf = request.form.get("numero_nf")
+                numero_nf = request.form.get("numero_nf", "")
                 
-                # Tratamento financeiro para não quebrar com vírgulas ou pontos
-                valor_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
-                valor = float(valor_str) if valor_str else 0.0
+                # Conversão blindada de moeda
+                v_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
+                try: valor = float(v_str) if v_str else 0.0
+                except ValueError: valor = 0.0
                 
                 nf_id = db.inserir_nf(
-                    cliente_id, 
-                    numero_nf, 
-                    valor, 
-                    request.form["data_emissao"], 
-                    pdf_b64, 
-                    arquivo.filename, 
-                    request.form.get("codigo_rastreio"), 
-                    request.form.get("transportadora"), 
+                    cliente_id, numero_nf, valor, 
+                    request.form.get("data_emissao", ""), 
+                    pdf_b64, arquivo.filename, 
+                    request.form.get("codigo_rastreio", ""), 
+                    request.form.get("transportadora", ""), 
                     "ativo", 
-                    request.form.get("observacao"), 
-                    request.form.get("representada")
+                    request.form.get("observacao", ""), 
+                    request.form.get("representada", "")
                 )
                 
-                boletos_salvos, i = 0, 0
-                while True:
+                boletos_salvos = 0
+                
+                # Substituímos o "while True" por um Loop seguro de no máximo 50 boletos
+                for i in range(50):
                     num_dup = request.form.get(f"dup_num_{i}")
-                    if not num_dup: break
+                    if not num_dup or str(num_dup).strip() == "":
+                        continue  # Se estiver em branco ou não existir, ignora e avança
+                        
                     p_pdf = request.files.get(f"pdf_boleto_{i}")
                     if p_pdf and p_pdf.filename:
-                        # Tratamento financeiro para os boletos
-                        val_dup_str = request.form.get(f"dup_val_{i}", "0").replace(".", "").replace(",", ".")
-                        val_dup = float(val_dup_str) if val_dup_str else 0.0
-                        
+                        v_dup_str = request.form.get(f"dup_val_{i}", "0").replace(".", "").replace(",", ".")
+                        try: val_dup = float(v_dup_str) if v_dup_str else 0.0
+                        except ValueError: val_dup = 0.0
+                            
                         db.inserir_titulo(
-                            cliente_id, 
-                            num_dup, 
-                            val_dup, 
-                            request.form[f"dup_venc_{i}"], 
+                            cliente_id, num_dup, val_dup, 
+                            request.form.get(f"dup_venc_{i}", ""), 
                             base64.b64encode(p_pdf.read()).decode(), 
-                            p_pdf.filename, 
-                            nf_id
+                            p_pdf.filename, nf_id
                         )
                         boletos_salvos += 1
-                    i += 1
-                flash(f"NF {numero_nf} salva com {boletos_salvos} boletos!", "sucesso")
+                        
+                flash(f"NF {numero_nf} salva com {boletos_salvos} boletos anexados!", "sucesso")
                 
             elif tipo == "boleto":
-                valor_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
-                valor = float(valor_str) if valor_str else 0.0
+                v_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
+                try: valor = float(v_str) if v_str else 0.0
+                except ValueError: valor = 0.0
+                
+                n_id = request.form.get("nf_id")
+                n_id_val = int(n_id) if n_id and str(n_id).strip() != "" else None
                 
                 db.inserir_titulo(
-                    cliente_id, 
-                    request.form["numero_titulo"], 
-                    valor, 
-                    request.form["vencimento"], 
-                    pdf_b64, 
-                    arquivo.filename, 
-                    request.form.get("nf_id")
+                    cliente_id, request.form.get("numero_titulo", ""), valor, 
+                    request.form.get("vencimento", ""), pdf_b64, arquivo.filename, n_id_val
                 )
-                flash("Boleto salvo com sucesso!", "sucesso")
+                flash("Boleto individual salvo com sucesso!", "sucesso")
+            else:
+                flash("Selecione se é uma Nota Fiscal ou um Boleto.", "erro")
                 
         except Exception as e:
-            flash(f"Ocorreu um erro ao salvar: {str(e)}", "erro")
+            # Em caso de qualquer erro grave, força o registro no terminal do Railway e avisa
+            print(">>> ERRO NO SISTEMA DE UPLOAD: ", str(e), file=sys.stderr, flush=True)
+            flash(f"Falha ao salvar. Verifique os dados. Erro: {str(e)}", "erro")
             
         return redirect(url_for("admin_upload"))
         
