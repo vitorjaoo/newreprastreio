@@ -7,11 +7,11 @@
 <div class="stats-grid" style="margin-bottom:1.75rem">
   <div class="stat-card gold-accent">
     <div class="stat-label">Em aberto</div>
-    <div class="stat-value red">R$ {{ "%.2f"|format(em_aberto)|replace('.', ',') }}</div>
+    <div class="stat-value red">R$ {{ em_aberto }}</div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Quitado</div>
-    <div class="stat-value green">R$ {{ "%.2f"|format(quitado)|replace('.', ',') }}</div>
+    <div class="stat-value green">R$ {{ quitado }} </div>
   </div>
   <div class="stat-card">
     <div class="stat-label">Títulos abertos</div>
@@ -71,7 +71,7 @@
 
           {# Valor #}
           <td style="padding:.875rem 1rem;text-align:right;font-weight:700;color:var(--gray-800)">
-            R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}
+            R$ {{ t.valor }}
           </td>
 
           {# Prazo #}
