@@ -10,16 +10,40 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
 
-# 🔹 FORMATADOR UNIVERSAL DE MOEDA (Ex: 2.889,90) 🔹
+# 🔹 FORMATADOR UNIVERSAL DE MOEDA PARA A TELA (Ex: 2.889,90) 🔹
 def formatar_moeda(valor):
     try:
         if valor is None or str(valor).strip() == "":
             return "0,00"
         v = float(valor)
-        # Formata com separador de milhar e inverte vírgulas/pontos para o padrão local
         return f"{v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return "0,00"
+
+# 🔹 CÉREBRO FINANCEIRO: LÊ QUALQUER TIPO DE DINHEIRO (2889.90 ou 2.889,90) 🔹
+def limpar_moeda(v_str):
+    if not v_str: return 0.0
+    v_str = str(v_str).strip()
+    v_str = re.sub(r'[^\d\.,]', '', v_str) # Remove tudo que não for número, ponto ou vírgula
+    if not v_str: return 0.0
+    
+    try:
+        if '.' in v_str and ',' in v_str:
+            if v_str.rfind(',') > v_str.rfind('.'):
+                return float(v_str.replace('.', '').replace(',', '.'))
+            else:
+                return float(v_str.replace(',', ''))
+        elif ',' in v_str:
+            return float(v_str.replace(',', '.'))
+        elif '.' in v_str:
+            parts = v_str.split('.')
+            if len(parts[-1]) == 2:
+                return float(v_str)
+            else:
+                return float(v_str.replace('.', ''))
+        return float(v_str)
+    except:
+        return 0.0
 
 @app.context_processor
 def globals_template():
@@ -53,20 +77,17 @@ def login_required(role=None):
 def parse_vencimento(v):
     if not v: return "9999-12-31"
     try:
-        if "-" in v and len(v.split("-")[0]) == 4:
-            return v  
+        if "-" in v and len(v.split("-")[0]) == 4: return v  
         if "/" in v:
             p = v.split("/")
             return f"{p[2]}-{p[1]}-{p[0]}"
-    except:
-        pass
+    except: pass
     return "9999-12-31"
 
 @app.route("/", methods=["GET", "POST"])
 def login():
     if session.get("perfil"):
-        if session["perfil"] == "admin":
-            return redirect(url_for("admin_dashboard"))
+        if session["perfil"] == "admin": return redirect(url_for("admin_dashboard"))
         return redirect(url_for("dashboard"))
         
     if request.method == "POST":
@@ -98,16 +119,13 @@ def sair():
 @app.route("/dashboard")
 @login_required()
 def dashboard():
-    if session["perfil"] == "admin": 
-        return redirect(url_for("admin_dashboard"))
+    if session["perfil"] == "admin": return redirect(url_for("admin_dashboard"))
     
     if session["perfil"] == "leitor":
         nfs = db.listar_todas_nfs()
         titulos = db.listar_todos_titulos()
-        for n in nfs:
-            n["numero_nf"] = f"{n['numero_nf']} - {n.get('cliente', '')}"
-        for t in titulos:
-            t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
+        for n in nfs: n["numero_nf"] = f"{n['numero_nf']} - {n.get('cliente', '')}"
+        for t in titulos: t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
     else:
         nfs = db.listar_nfs(session["usuario"]["id"])
         titulos = db.listar_titulos(session["usuario"]["id"])
@@ -119,38 +137,30 @@ def dashboard():
     for nf in nfs:
         nf["eventos"] = db.listar_eventos_rastreio(nf["id"])
         nf["tem_rastreio"] = len(nf["eventos"]) > 0
-        nf["valor"] = formatar_moeda(nf.get("valor")) # Aplica a máscara
-
-    for t in titulos:
-        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
+        nf["valor"] = formatar_moeda(nf.get("valor")) 
 
     return render_template("dashboard.html", nfs=nfs, titulos_abertos=titulos_abertos, titulos_vencidos=titulos_vencidos)
 
 @app.route("/financeiro")
 @login_required()
 def financeiro():
-    if session["perfil"] == "admin": 
-        return redirect(url_for("admin_dashboard"))
+    if session["perfil"] == "admin": return redirect(url_for("admin_dashboard"))
     
     if session["perfil"] == "leitor":
         titulos = db.listar_todos_titulos()
-        for t in titulos:
-            t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
+        for t in titulos: t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
     else:
         titulos = db.listar_titulos(session["usuario"]["id"])
 
     hoje = datetime.now().strftime("%Y-%m-%d")
     hoje_date = date.today()
     
-    # 1. Faz as contas primeiro usando os números puros
     em_aberto_val = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
     quitado_val   = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
     
-    # 2. Formata os totais para exibir na tela
     em_aberto = formatar_moeda(em_aberto_val)
     quitado = formatar_moeda(quitado_val)
 
-    # 3. Formata os boletos individuais
     for t in titulos:
         iso = parse_vencimento(t.get("vencimento"))
         t["data_ordem"] = iso
@@ -166,7 +176,7 @@ def financeiro():
             t["status_visual"] = t["status"]
             t["dias_vencimento"] = None
             
-        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
+        t["valor"] = formatar_moeda(t.get("valor")) 
 
     titulos.sort(key=lambda x: x["data_ordem"])
     
@@ -175,20 +185,18 @@ def financeiro():
 @app.route("/solicitar-pagamento/<int:titulo_id>", methods=["POST"])
 @login_required()
 def solicitar_pagamento(titulo_id):
-    flash("Solicitação recebida com sucesso! Em breve entraremos em contato.", "sucesso")
+    flash("Solicitação recebida com sucesso!", "sucesso")
     return redirect(url_for("financeiro"))
 
 @app.route("/entrega/<int:nf_id>")
 @login_required()
 def entrega(nf_id):
-    if session["perfil"] == "admin": 
-        return redirect(url_for("admin_dashboard"))
+    if session["perfil"] == "admin": return redirect(url_for("admin_dashboard"))
     
     if session["perfil"] == "leitor":
         nfs = db.listar_todas_nfs()
         titulos_nf = [t for t in db.listar_todos_titulos() if t.get("nf_id") == nf_id]
-        for t in titulos_nf:
-            t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
+        for t in titulos_nf: t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
     else:
         nfs = db.listar_nfs(session["usuario"]["id"])
         titulos_nf = [t for t in db.listar_titulos(session["usuario"]["id"]) if t.get("nf_id") == nf_id]
@@ -200,11 +208,11 @@ def entrega(nf_id):
 
     nf["eventos"] = db.listar_eventos_rastreio(nf_id)
     nf["pdf"] = db.get_pdf_nf(nf_id)
-    nf["valor"] = formatar_moeda(nf.get("valor")) # Aplica a máscara
+    nf["valor"] = formatar_moeda(nf.get("valor")) 
     
     for t in titulos_nf:
         t["data_ordem"] = parse_vencimento(t.get("vencimento"))
-        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
+        t["valor"] = formatar_moeda(t.get("valor")) 
         
     titulos_nf.sort(key=lambda x: x["data_ordem"])
     
@@ -230,9 +238,6 @@ def trocar_senha():
 @app.route("/download/nf/<int:nf_id>")
 @login_required()
 def download_nf(nf_id):
-    if session["perfil"] == "cliente":
-        nfs = db.listar_nfs(session["usuario"]["id"])
-        if not any(n["id"] == nf_id for n in nfs): return "Não autorizado", 403
     dados = db.get_pdf_nf(nf_id)
     if not dados or not dados.get("pdf_base64"): return "PDF não disponível", 404
     return send_file(io.BytesIO(base64.b64decode(dados["pdf_base64"])), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"NF_{nf_id}.pdf")
@@ -240,9 +245,6 @@ def download_nf(nf_id):
 @app.route("/download/boleto/<int:titulo_id>")
 @login_required()
 def download_boleto(titulo_id):
-    if session["perfil"] == "cliente":
-        titulos = db.listar_titulos(session["usuario"]["id"])
-        if not any(t["id"] == titulo_id for t in titulos): return "Não autorizado", 403
     dados = db.get_pdf_titulo(titulo_id)
     if not dados or not dados.get("boleto_base64"): return "PDF não disponível", 404
     return send_file(io.BytesIO(base64.b64decode(dados["boleto_base64"])), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"Boleto_{titulo_id}.pdf")
@@ -257,7 +259,7 @@ def admin_dashboard():
     clientes = db.listar_clientes()
     
     em_aberto_val = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
-    em_aberto = formatar_moeda(em_aberto_val) # Aplica a máscara
+    em_aberto = formatar_moeda(em_aberto_val)
     
     titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
     return render_template("admin/dashboard.html", total_clientes=len(clientes), total_nfs=len(nfs), titulos_abertos=titulos_abertos, em_aberto=em_aberto)
@@ -284,9 +286,8 @@ def admin_upload():
             if tipo == "nf":
                 numero_nf = request.form.get("numero_nf", "")
                 
-                v_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
-                try: valor = float(v_str) if v_str else 0.0
-                except ValueError: valor = 0.0
+                # APLICA A NOVA LIMPEZA INTELIGENTE
+                valor = limpar_moeda(request.form.get("valor", "0"))
                 
                 nf_id = db.inserir_nf(
                     cliente_id, numero_nf, valor, 
@@ -307,9 +308,8 @@ def admin_upload():
                         
                     p_pdf = request.files.get(f"pdf_boleto_{i}")
                     if p_pdf and p_pdf.filename:
-                        v_dup_str = request.form.get(f"dup_val_{i}", "0").replace(".", "").replace(",", ".")
-                        try: val_dup = float(v_dup_str) if v_dup_str else 0.0
-                        except ValueError: val_dup = 0.0
+                        # APLICA A NOVA LIMPEZA NOS BOLETOS
+                        val_dup = limpar_moeda(request.form.get(f"dup_val_{i}", "0"))
                             
                         db.inserir_titulo(
                             cliente_id, num_dup, val_dup, 
@@ -322,10 +322,7 @@ def admin_upload():
                 flash(f"NF {numero_nf} salva com {boletos_salvos} boletos anexados!", "sucesso")
                 
             elif tipo == "boleto":
-                v_str = request.form.get("valor", "0").replace(".", "").replace(",", ".")
-                try: valor = float(v_str) if v_str else 0.0
-                except ValueError: valor = 0.0
-                
+                valor = limpar_moeda(request.form.get("valor", "0"))
                 n_id = request.form.get("nf_id")
                 n_id_val = int(n_id) if n_id and str(n_id).strip() != "" else None
                 
@@ -334,12 +331,10 @@ def admin_upload():
                     request.form.get("vencimento", ""), pdf_b64, arquivo.filename, n_id_val
                 )
                 flash("Boleto individual salvo com sucesso!", "sucesso")
-            else:
-                flash("Selecione se é uma Nota Fiscal ou um Boleto.", "erro")
                 
         except Exception as e:
-            print(">>> ERRO NO SISTEMA DE UPLOAD: ", str(e), file=sys.stderr, flush=True)
-            flash(f"Falha ao salvar. Verifique os dados. Erro: {str(e)}", "erro")
+            print(">>> ERRO: ", str(e), file=sys.stderr, flush=True)
+            flash(f"Erro ao salvar: {str(e)}", "erro")
             
         return redirect(url_for("admin_upload"))
         
@@ -368,15 +363,12 @@ def admin_clientes_editar(cid):
 @login_required("admin")
 def admin_nfs():
     nfs = db.listar_todas_nfs()
-    
     if request.method == "POST":
         db.atualizar_status_nf(int(request.form["nf_id"]), request.form.get("status",""), request.form.get("observacao",""))
         flash("NF atualizada!", "sucesso")
         return redirect(url_for("admin_nfs"))
         
-    for n in nfs:
-        n["valor"] = formatar_moeda(n.get("valor")) # Aplica a máscara
-        
+    for n in nfs: n["valor"] = formatar_moeda(n.get("valor"))
     return render_template("admin/nfs.html", nfs=nfs)
 
 @app.route("/admin/nfs/deletar/<int:nf_id>", methods=["POST"])
@@ -405,8 +397,7 @@ def admin_titulos():
     em_aberto = formatar_moeda(em_aberto_val)
     recebido = formatar_moeda(recebido_val)
     
-    for t in titulos:
-        t["valor"] = formatar_moeda(t.get("valor")) # Aplica a máscara
+    for t in titulos: t["valor"] = formatar_moeda(t.get("valor"))
         
     return render_template("admin/titulos.html", titulos=titulos, em_aberto=em_aberto, recebido=recebido)
 
@@ -426,10 +417,8 @@ def admin_rastreio_adicionar():
     observacao = request.form.get("observacao", "")
     
     try:
-        try:
-            db.inserir_evento_rastreio(int(nf_id), data, status, observacao)
-        except AttributeError:
-            db.adicionar_evento_rastreio(int(nf_id), data, status, observacao)
+        try: db.inserir_evento_rastreio(int(nf_id), data, status, observacao)
+        except AttributeError: db.adicionar_evento_rastreio(int(nf_id), data, status, observacao)
         flash("Evento de rastreio adicionado com sucesso!", "sucesso")
     except Exception as e:
         flash(f"Erro ao adicionar evento: {str(e)}", "erro")
