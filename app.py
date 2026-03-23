@@ -38,15 +38,14 @@ def login_required(role=None):
         return decorated
     return decorator
 
-# 🔹 TRADUTOR DE DATAS PARA ORDENAÇÃO PERFEITA 🔹
 def parse_vencimento(v):
     if not v: return "9999-12-31"
     try:
         if "-" in v and len(v.split("-")[0]) == 4:
-            return v  # Já está no formato YYYY-MM-DD
+            return v  
         if "/" in v:
             p = v.split("/")
-            return f"{p[2]}-{p[1]}-{p[0]}" # Converte DD/MM/YYYY para YYYY-MM-DD
+            return f"{p[2]}-{p[1]}-{p[0]}"
     except:
         pass
     return "9999-12-31"
@@ -103,8 +102,6 @@ def dashboard():
 
     hoje = datetime.now().strftime("%Y-%m-%d")
     titulos_abertos  = [t for t in titulos if t["status"] == "aberto"]
-    
-    # Usa a nova função para evitar erros de data
     titulos_vencidos = [t for t in titulos_abertos if parse_vencimento(t.get("vencimento")) < hoje]
 
     for nf in nfs:
@@ -145,7 +142,6 @@ def financeiro():
             t["status_visual"] = t["status"]
             t["dias_vencimento"] = None
 
-    # Ordenação Cronológica (Mais antigo/vencido para o mais recente)
     titulos.sort(key=lambda x: x["data_ordem"])
 
     em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
@@ -182,12 +178,9 @@ def entrega(nf_id):
     nf["eventos"] = db.listar_eventos_rastreio(nf_id)
     nf["pdf"] = db.get_pdf_nf(nf_id)
     
-    # 🔹 O SEGREDO APLICADO NA PÁGINA DE ENTREGA 🔹
-    # Preparamos a data invisível para todos os títulos desta nota
     for t in titulos_nf:
         t["data_ordem"] = parse_vencimento(t.get("vencimento"))
         
-    # Ordenamos os títulos antes de enviá-los para a tela
     titulos_nf.sort(key=lambda x: x["data_ordem"])
     
     return render_template("entrega.html", nf=nf, titulos=titulos_nf)
@@ -326,6 +319,27 @@ def admin_rastreio():
     nfs = db.listar_todas_nfs()
     for n in nfs: n["eventos"] = db.listar_eventos_rastreio(n["id"])
     return render_template("admin/rastreio.html", nfs=nfs)
+
+# 🔹 ROTA NOVA PARA O FORMULÁRIO DE RASTREIO 🔹
+@app.route("/admin/rastreio/adicionar", methods=["POST"])
+@login_required("admin")
+def admin_rastreio_adicionar():
+    nf_id = request.form.get("nf_id")
+    data = request.form.get("data", datetime.now().strftime("%d/%m/%Y %H:%M"))
+    status = request.form.get("status")
+    observacao = request.form.get("observacao", "")
+    
+    try:
+        # Coloquei um try/except duplo para prevenir qualquer variação do nome da função no banco de dados!
+        try:
+            db.inserir_evento_rastreio(int(nf_id), data, status, observacao)
+        except AttributeError:
+            db.adicionar_evento_rastreio(int(nf_id), data, status, observacao)
+        flash("Evento de rastreio adicionado com sucesso!", "sucesso")
+    except Exception as e:
+        flash(f"Erro ao adicionar evento: {str(e)}", "erro")
+        
+    return redirect(url_for("admin_rastreio"))
 
 @app.route("/admin/extrair-xml", methods=["POST"])
 @login_required("admin")
