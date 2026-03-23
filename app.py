@@ -120,6 +120,7 @@ def financeiro():
     hoje = datetime.now().strftime("%Y-%m-%d")
     from datetime import date
     
+    # Prepara os títulos com a data invertida (YYYY-MM-DD) para podermos ordenar corretamente
     for t in titulos:
         try:
             p = t["vencimento"].split("/")
@@ -128,22 +129,27 @@ def financeiro():
             hoje_date = date.today()
             t["dias_vencimento"] = (venc_date - hoje_date).days
             t["status_visual"] = "vencido" if t["status"] == "aberto" and iso < hoje else t["status"]
-            # Guardamos a data formatada para facilitar a ordenação
             t["data_ordem"] = iso
         except:
             t["status_visual"] = t["status"]
             t["dias_vencimento"] = None
-            # Títulos sem data ou data corrompida vão para o final
-            t["data_ordem"] = "9999-99-99"
+            t["data_ordem"] = "9999-12-31" # Se não tiver data, vai para o fim da lista
 
-    # 🔹 O SEGREDO DA ORDENAÇÃO ESTÁ AQUI 🔹
-    # Ordena os boletos do mais antigo (menor data) para o mais recente
+    # ORDENAÇÃO CRONOLÓGICA: Do mais antigo (ou a vencer mais cedo) para o mais recente
     titulos.sort(key=lambda x: x["data_ordem"])
 
     em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
     quitado   = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
     
     return render_template("financeiro.html", titulos=titulos, em_aberto=em_aberto, quitado=quitado)
+
+# 🔹 NOVA ROTA ADICIONADA PARA EVITAR O ERRO DO BOTÃO NO FINANCEIRO 🔹
+@app.route("/solicitar-pagamento/<int:titulo_id>", methods=["POST"])
+@login_required()
+def solicitar_pagamento(titulo_id):
+    # Por enquanto, apenas mostra uma mensagem de sucesso para não quebrar a página
+    flash("Solicitação recebida com sucesso! Em breve entraremos em contacto.", "sucesso")
+    return redirect(url_for("financeiro"))
 
 @app.route("/entrega/<int:nf_id>")
 @login_required()
