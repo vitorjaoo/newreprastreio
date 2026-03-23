@@ -32,7 +32,7 @@ def login_required(role=None):
             if not session.get("perfil"):
                 return redirect(url_for("login"))
             if role == "admin" and session.get("perfil") != "admin":
-                flash("Acesso restrito.", "erro")
+                flash("Acesso restrito ao administrador.", "erro")
                 return redirect(url_for("admin_dashboard"))
             return f(*args, **kwargs)
         return decorated
@@ -57,6 +57,31 @@ def login():
         flash("Credenciais inválidas.", "erro")
     return render_template("login.html")
 
+@app.route("/sair")
+def sair():
+    session.clear()
+    return redirect(url_for("login"))
+
+@app.route("/admin")
+@login_required()
+def admin_dashboard():
+    if session["perfil"] not in ["admin", "leitor"]: 
+        return redirect(url_for("dashboard"))
+        
+    nfs = db.listar_todas_nfs()
+    titulos = db.listar_todos_titulos()
+    clientes = db.listar_clientes()
+    
+    # Cálculos financeiros repostos!
+    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
+    titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
+    
+    return render_template("admin/dashboard.html", 
+                           total_clientes=len(clientes), 
+                           total_nfs=len(nfs),
+                           titulos_abertos=titulos_abertos,
+                           em_aberto=em_aberto)
+
 @app.route("/admin/upload", methods=["GET", "POST"])
 @login_required("admin")
 def admin_upload():
@@ -68,11 +93,11 @@ def admin_upload():
             if tipo == "nf":
                 numero_nf = request.form.get("numero_nf")
                 nf_id = db.inserir_nf(int(request.form["cliente_id"]), numero_nf, float(request.form["valor"]), request.form["data_emissao"], pdf_b64, arquivo.filename, request.form.get("codigo_rastreio"), request.form.get("transportadora"), "ativo", request.form.get("observacao"), request.form.get("representada"))
+                
                 boletos_salvos, i = 0, 0
                 while True:
                     num_dup = request.form.get(f"dup_num_{i}")
-                    if not num_dup:
-                        break
+                    if not num_dup: break
                     p_pdf = request.files.get(f"pdf_boleto_{i}")
                     if p_pdf and p_pdf.filename:
                         db.inserir_titulo(int(request.form["cliente_id"]), num_dup, float(request.form[f"dup_val_{i}"]), request.form[f"dup_venc_{i}"], base64.b64encode(p_pdf.read()).decode(), p_pdf.filename, nf_id)
@@ -81,12 +106,6 @@ def admin_upload():
                 flash(f"NF {numero_nf} salva com {boletos_salvos} boletos!", "sucesso")
         return redirect(url_for("admin_upload"))
     return render_template("admin/upload.html", clientes=db.listar_clientes(), tipo_ativo=request.args.get("tipo", "nf"))
-
-@app.route("/admin")
-@login_required()
-def admin_dashboard():
-    if session["perfil"] not in ["admin", "leitor"]: return redirect(url_for("dashboard"))
-    return render_template("admin/dashboard.html", total_clientes=len(db.listar_clientes()), total_nfs=len(db.listar_todas_nfs()))
 
 @app.route("/admin/clientes", methods=["GET", "POST"])
 @login_required()
@@ -135,11 +154,6 @@ def extrair_xml():
 @login_required()
 def dashboard():
     return render_template("dashboard.html", nfs=db.listar_nfs(session["usuario"]["id"]), titulos=db.listar_titulos(session["usuario"]["id"]))
-
-@app.route("/sair")
-def sair():
-    session.clear()
-    return redirect(url_for("login"))
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
