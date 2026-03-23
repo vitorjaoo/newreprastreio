@@ -145,7 +145,7 @@ def financeiro():
             t["status_visual"] = t["status"]
             t["dias_vencimento"] = None
 
-    # 🔹 ORDENAÇÃO CRONOLÓGICA (Mais antigo/vencido para o mais recente)
+    # Ordenação Cronológica (Mais antigo/vencido para o mais recente)
     titulos.sort(key=lambda x: x["data_ordem"])
 
     em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
@@ -181,6 +181,14 @@ def entrega(nf_id):
 
     nf["eventos"] = db.listar_eventos_rastreio(nf_id)
     nf["pdf"] = db.get_pdf_nf(nf_id)
+    
+    # 🔹 O SEGREDO APLICADO NA PÁGINA DE ENTREGA 🔹
+    # Preparamos a data invisível para todos os títulos desta nota
+    for t in titulos_nf:
+        t["data_ordem"] = parse_vencimento(t.get("vencimento"))
+        
+    # Ordenamos os títulos antes de enviá-los para a tela
+    titulos_nf.sort(key=lambda x: x["data_ordem"])
     
     return render_template("entrega.html", nf=nf, titulos=titulos_nf)
 
