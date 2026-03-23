@@ -69,11 +69,14 @@ def sair():
     session.clear()
     return redirect(url_for("login"))
 
-# ─── ROTAS DO CLIENTE ────────────────────────────────────────────────────────
+# ─── ROTAS DO DASHBOARD E FINANCEIRO ─────────────────────────────────────────
+
 @app.route("/dashboard")
 @login_required()
 def dashboard():
-    if session["perfil"] in ["admin", "leitor"]: return redirect(url_for("admin_dashboard"))
+    # Se for admin, vai para o painel de admin. Se for equipe, a rota é tratada no /admin.
+    if session["perfil"] in ["admin", "leitor"]: 
+        return redirect(url_for("admin_dashboard"))
     
     nfs = db.listar_nfs(session["usuario"]["id"])
     titulos = db.listar_titulos(session["usuario"]["id"])
@@ -92,6 +95,74 @@ def dashboard():
         nf["tem_rastreio"] = len(nf["eventos"]) > 0
 
     return render_template("dashboard.html", nfs=nfs, titulos_abertos=titulos_abertos, titulos_vencidos=titulos_vencidos)
+
+@app.route("/admin")
+@login_required()
+def admin_dashboard():
+    # O ADMIN vê os totais clássicos do escritório
+    if session["perfil"] == "admin":
+        nfs = db.listar_todas_nfs()
+        titulos = db.listar_todos_titulos()
+        clientes = db.listar_clientes()
+        em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
+        titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
+        return render_template("admin/dashboard.html", total_clientes=len(clientes), total_nfs=len(nfs), titulos_abertos=titulos_abertos, em_aberto=em_aberto)
+    
+    # A EQUIPE vê a página do Cliente (cartões), mas com TODOS os dados
+    elif session["perfil"] == "leitor":
+        nfs = db.listar_todas_nfs()
+        titulos = db.listar_todos_titulos()
+        
+        # Acrescentar o nome do cliente no nº para facilitar
+        for n in nfs:
+            n["numero_nf"] = f"{n['numero_nf']} - {n.get('cliente', '')}"
+        for t in titulos:
+            t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
+            
+        hoje = datetime.now().strftime("%Y-%m-%d")
+        titulos_abertos  = [t for t in titulos if t["status"] == "aberto"]
+        titulos_vencidos = []
+        
+        for t in titulos_abertos:
+            try:
+                p = t["vencimento"].split("/")
+                if f"{p[2]}-{p[1]}-{p[0]}" < hoje: titulos_vencidos.append(t)
+            except: pass
+
+        for nf in nfs:
+            nf["eventos"] = db.listar_eventos_rastreio(nf["id"])
+            nf["tem_rastreio"] = len(nf["eventos"]) > 0
+
+        return render_template("dashboard.html", nfs=nfs, titulos_abertos=titulos_abertos, titulos_vencidos=titulos_vencidos)
+        
+    return redirect(url_for("dashboard"))
+
+@app.route("/entrega/<int:nf_id>")
+@login_required()
+def entrega(nf_id):
+    if session["perfil"] == "admin": 
+        return redirect(url_for("admin_dashboard"))
+    
+    # Se for Equipa, puxa de todas as notas do sistema
+    if session["perfil"] == "leitor":
+        nfs = db.listar_todas_nfs()
+        titulos_nf = [t for t in db.listar_todos_titulos() if t.get("nf_id") == nf_id]
+        for t in titulos_nf:
+            t["numero_titulo"] = f"{t['numero_titulo']} - {t.get('cliente', '')}"
+    # Se for Cliente, puxa apenas das notas dele
+    else:
+        nfs = db.listar_nfs(session["usuario"]["id"])
+        titulos_nf = [t for t in db.listar_titulos(session["usuario"]["id"]) if t.get("nf_id") == nf_id]
+
+    nf = next((n for n in nfs if n["id"] == nf_id), None)
+    if not nf:
+        flash("Nota fiscal não encontrada.", "erro")
+        return redirect(url_for("admin_dashboard") if session["perfil"] == "leitor" else url_for("dashboard"))
+
+    nf["eventos"] = db.listar_eventos_rastreio(nf_id)
+    nf["pdf"] = db.get_pdf_nf(nf_id)
+    
+    return render_template("entrega.html", nf=nf, titulos=titulos_nf)
 
 @app.route("/financeiro")
 @login_required()
@@ -116,22 +187,6 @@ def financeiro():
     em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
     quitado   = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "pago")
     return render_template("financeiro.html", titulos=titulos, em_aberto=em_aberto, quitado=quitado)
-
-@app.route("/entrega/<int:nf_id>")
-@login_required()
-def entrega(nf_id):
-    if session["perfil"] in ["admin", "leitor"]: return redirect(url_for("admin_dashboard"))
-    
-    nfs = db.listar_nfs(session["usuario"]["id"])
-    nf = next((n for n in nfs if n["id"] == nf_id), None)
-    if not nf:
-        flash("Nota fiscal não encontrada.", "erro")
-        return redirect(url_for("dashboard"))
-
-    nf["eventos"] = db.listar_eventos_rastreio(nf_id)
-    nf["pdf"] = db.get_pdf_nf(nf_id)
-    titulos_nf = [t for t in db.listar_titulos(session["usuario"]["id"]) if t.get("nf_id") == nf_id]
-    return render_template("entrega.html", nf=nf, titulos=titulos_nf)
 
 @app.route("/trocar-senha", methods=["GET", "POST"])
 @login_required()
@@ -170,17 +225,7 @@ def download_boleto(titulo_id):
     if not dados or not dados.get("boleto_base64"): return "PDF não disponível", 404
     return send_file(io.BytesIO(base64.b64decode(dados["boleto_base64"])), mimetype="application/pdf", as_attachment=True, download_name=dados.get("nome_arquivo") or f"Boleto_{titulo_id}.pdf")
 
-# ─── ROTAS DO ADMIN / EQUIPA ─────────────────────────────────────────────────
-@app.route("/admin")
-@login_required()
-def admin_dashboard():
-    if session["perfil"] not in ["admin", "leitor"]: return redirect(url_for("dashboard"))
-    nfs = db.listar_todas_nfs()
-    titulos = db.listar_todos_titulos()
-    clientes = db.listar_clientes()
-    em_aberto = sum(float(t["valor"] or 0) for t in titulos if t["status"] == "aberto")
-    titulos_abertos = len([t for t in titulos if t["status"] == "aberto"])
-    return render_template("admin/dashboard.html", total_clientes=len(clientes), total_nfs=len(nfs), titulos_abertos=titulos_abertos, em_aberto=em_aberto)
+# ─── ROTAS DA OPERAÇÃO E CADASTRO (ADMIN / EQUIPA) ───────────────────────────
 
 @app.route("/admin/upload", methods=["GET", "POST"])
 @login_required("admin")
