@@ -10,7 +10,7 @@ app = Flask(__name__)
 app.config.from_object(Config)
 app.secret_key = Config.SECRET_KEY
 
-# 🔹 FORMATADOR UNIVERSAL DE MOEDA PARA A TELA (Ex: 2.889,90) 🔹
+# 🔹 FORMATADOR UNIVERSAL DE MOEDA PARA O ECRÃ (Ex: 2.889,90) 🔹
 def formatar_moeda(valor):
     try:
         if valor is None or str(valor).strip() == "":
@@ -321,7 +321,6 @@ def admin_upload():
                     b64_boleto = ""
                     nome_arq_boleto = ""
                     
-                    # Permite salvar mesmo sem o ficheiro do boleto (Boleto Opcional)
                     if p_pdf and p_pdf.filename:
                         b64_boleto = base64.b64encode(p_pdf.read()).decode()
                         nome_arq_boleto = p_pdf.filename
@@ -457,12 +456,10 @@ def extrair_xml():
     
     dados = extrair_dados_xml(f.read())
     
-    # Se a extração for um sucesso, aplica a formatação de dinheiro
     if isinstance(dados, dict) and dados.get("sucesso"):
         if "valor" in dados:
             dados["valor"] = formatar_moeda(dados["valor"])
             
-        # Pega tanto a chave duplicatas quanto boletos, dependendo de como o extrator retorna
         lista_parcelas = dados.get("duplicatas", []) or dados.get("boletos", [])
         for p in lista_parcelas:
             if "valor" in p:
@@ -470,22 +467,35 @@ def extrair_xml():
                 
     return jsonify(dados)
 
+
 # ─── PORTA SECRETA (WEBHOOK PARA O MAKE.COM) ─────────────────────────────────
 @app.route("/api/webhook/receber-nota", methods=["POST"])
 def webhook_receber_nota():
-    # 1. Verifica a senha de segurança (para evitar envios falsos)
+    # 1. Verifica a senha de segurança
     senha_enviada = request.form.get("token") or request.headers.get("Authorization")
-    senha_correta = os.environ.get("WEBHOOK_SECRET", "lima-notas-2026") # Senha padrão caso não tenha no painel
+    senha_correta = os.environ.get("WEBHOOK_SECRET", "lima-notas-2026") 
     
     if senha_enviada != senha_correta:
         return jsonify({"erro": "Acesso negado. Senha incorreta."}), 403
 
-    # 2. Recebe os ficheiros enviados pelo Make.com
-    arquivo_pdf = request.files.get("pdf")
-    arquivo_xml = request.files.get("xml")
+    # 2. CÉREBRO INTELIGENTE: Procura quem é PDF e quem é XML pelos nomes dos ficheiros
+    arquivo_pdf = None
+    arquivo_xml = None
 
+    for chave, arquivo in request.files.items():
+        if arquivo and arquivo.filename:
+            nome_min = arquivo.filename.lower()
+            if nome_min.endswith('.pdf'):
+                arquivo_pdf = arquivo
+            elif nome_min.endswith('.xml'):
+                arquivo_xml = arquivo
+
+    # Se faltar algum dos dois, avisa exatamente qual faltou
     if not arquivo_pdf or not arquivo_xml:
-        return jsonify({"erro": "É obrigatório enviar o PDF e o XML."}), 400
+        return jsonify({
+            "erro": "Faltam anexos.", 
+            "detalhe": f"Recebido: PDF={'Sim' if arquivo_pdf else 'Não'}, XML={'Sim' if arquivo_xml else 'Não'}"
+        }), 400
 
     # 3. Extrai toda a inteligência do XML
     conteudo_xml = arquivo_xml.read()
@@ -499,7 +509,6 @@ def webhook_receber_nota():
     if not cnpj_cliente:
         return jsonify({"erro": "CNPJ não encontrado no XML."}), 400
 
-    # Limpa a formatação do CNPJ para procurar no banco de dados
     cnpj_limpo = re.sub(r'\D', '', cnpj_cliente)
     clientes = db.listar_clientes()
     cliente_destino = next((c for c in clientes if re.sub(r'\D', '', c.get("cnpj", "")) == cnpj_limpo), None)
@@ -517,15 +526,15 @@ def webhook_receber_nota():
         valor=limpar_moeda(dados_xml.get("valor")), 
         data_emissao=dados_xml.get("data_emissao"),
         pdf_base64=pdf_b64,
-        nome_arquivo=arquivo_pdf.filename or f"NF_{dados_xml.get('numero_nf')}.pdf",
+        nome_arquivo=arquivo_pdf.filename,
         codigo_rastreio="",
         transportadora=dados_xml.get("transportadora"),
         status="ativo",
-        observacao="📥 Recebido via Automação de E-mail (Make)",
+        observacao="📥 Recebido via Automação (Make)",
         representada=dados_xml.get("representada")
     )
 
-    # 6. Salva os Boletos (apenas com os dados de cobrança, sem PDF anexado)
+    # 6. Salva as Parcelas / Boletos
     boletos_salvos = 0
     lista_parcelas = dados_xml.get("duplicatas", []) or dados_xml.get("boletos", [])
     
@@ -535,7 +544,7 @@ def webhook_receber_nota():
             numero_titulo=dup.get("numero"),
             valor=limpar_moeda(dup.get("valor")),
             vencimento=dup.get("vencimento"),
-            boleto_base64="", # Fica em branco intencionalmente
+            boleto_base64="", 
             nome_arquivo="",
             nf_id=nf_id
         )
@@ -543,7 +552,7 @@ def webhook_receber_nota():
 
     return jsonify({
         "sucesso": True, 
-        "mensagem": f"NF {dados_xml.get('numero_nf')} e {boletos_salvos} parcelas cadastradas automaticamente para o cliente {cliente_destino['nome']}!"
+        "mensagem": f"NF {dados_xml.get('numero_nf')} e {boletos_salvos} parcelas cadastradas!"
     }), 200
 
 if __name__ == "__main__":
