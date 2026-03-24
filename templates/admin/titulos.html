@@ -43,11 +43,12 @@
         <tr><th>Título</th><th>Cliente</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
-        {% for t in titulos %}
+        {# Correção: Ordenando por vencimento e corrigindo impressão do valor #}
+        {% for t in titulos|sort(attribute='vencimento') %}
         <tr>
           <td style="font-weight:500">{{ t.numero_titulo }}</td>
           <td>{{ t.cliente }}</td>
-          <td style="font-weight:600">R$ {{ "%.2f"|format(t.valor|float)|replace('.', ',') }}</td>
+          <td style="font-weight:600">R$ {{ t.valor }}</td>
           <td>{{ t.vencimento }}</td>
           <td>
             {% if t.status == 'pago' %}
