@@ -17,7 +17,7 @@
           <td style="font-weight:600">{{ nf.numero_nf }}</td>
           <td>{{ nf.cliente }}</td>
           <td>{{ nf.representada or '—' }}</td>
-          <td>R$ {{ "%.2f"|format(nf.valor|float)|replace('.', ',') }}</td>
+          <td>R$ {{ nf.valor }}</td>
           <td>{{ nf.data_emissao or '—' }}</td>
           <td>
             <span class="badge {{ 'badge-green' if nf.status == 'entregue' else 'badge-blue' }}">
