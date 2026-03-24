@@ -128,14 +128,7 @@
                 {% else %}
                 <span style="font-size:.75rem;color:var(--gray-300)">Boleto pendente</span>
                 {% endif %}
-                <form method="POST" action="{{ url_for('solicitar_pagamento', titulo_id=t.id) }}"
-                      onsubmit="return confirm('Confirmar que este título foi pago?')">
-                  <button type="submit" class="btn btn-sm"
-                          style="background:var(--gold-lt);color:#7A5C00;border-color:var(--gold-mid);width:100%">
-                    💰 Já paguei
-                  </button>
-                </form>
-              {% elif t.status == 'aguardando_confirmacao' %}
+                {% elif t.status == 'aguardando_confirmacao' %}
                 <span style="font-size:.75rem;color:#5B21B6;font-weight:600">⏳ Aguardando<br>confirmação</span>
               {% else %}
                 <span style="font-size:.75rem;color:var(--gray-300)">—</span>
